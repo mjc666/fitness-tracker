@@ -9,9 +9,25 @@ const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
 
 Deno.serve(async (req) => {
   try {
+    const { searchParams } = new URL(req.url)
+    let userId = searchParams.get('user_id')
+
+    // If no user_id in params, try to get from Auth header (if provided)
+    if (!userId) {
+      const authHeader = req.headers.get('Authorization')
+      if (authHeader) {
+        const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+        userId = user?.id
+      }
+    }
+
+    if (!userId) return new Response(JSON.stringify({ error: 'User ID required' }), { status: 400 })
+
+    // 1. Get the auth record for THIS specific user
     const { data: auth, error: authError } = await supabase
       .from('withings_auth')
       .select('*')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
@@ -69,6 +85,7 @@ Deno.serve(async (req) => {
         if (m) {
           const val = m.value * Math.pow(10, m.unit)
           const { error } = await supabase.from('metrics').upsert({
+            user_id: userId,
             weight: parseFloat(val.toFixed(2)),
             height: 0, bmi: 0,
             created_at: new Date(group.date * 1000).toISOString(),
@@ -100,6 +117,7 @@ Deno.serve(async (req) => {
       for (const act of actData.body.activities) {
         if (act.calories > 0) {
           const { error } = await supabase.from('exercise').upsert({
+            user_id: userId,
             name: 'Withings Activity',
             calories_burned: Math.round(act.calories),
             created_at: act.date + 'T12:00:00Z',

@@ -11,10 +11,10 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 Deno.serve(async (req) => {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get('code')
-  const state = searchParams.get('state')
+  const state = searchParams.get('state') // We pass the user_id as state
 
-  if (!code) {
-    return new Response(JSON.stringify({ error: 'No code provided' }), {
+  if (!code || !state) {
+    return new Response(JSON.stringify({ error: 'No code or user_id provided' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
   const { access_token, refresh_token, expires_in, userid } = tokenData.body
 
-  // 2. Store tokens in withings_auth table
+  // 2. Store tokens in withings_auth table, associated with the correct user
   const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
   
   const expires_at = new Date()
@@ -54,7 +54,8 @@ Deno.serve(async (req) => {
   const { error: upsertError } = await supabase
     .from('withings_auth')
     .upsert({
-      userid: userid.toString(),
+      user_id: state, // Associate with the user who authorized
+      userid: userid.toString(), // Withings-side user ID
       access_token,
       refresh_token,
       expires_at: expires_at.toISOString(),
@@ -72,7 +73,7 @@ Deno.serve(async (req) => {
     <html>
       <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
         <h1 style="color: #10b981;">Successfully Connected!</h1>
-        <p>Your Withings account is now linked to your Fitness Tracker.</p>
+        <p>Your Withings account is now linked to your Fitness Tracker profile.</p>
         <p>You can close this window now.</p>
       </body>
     </html>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -32,21 +32,100 @@ interface MetricsEntry {
   created_at: string;
 }
 
+interface Profile {
+  id?: string;
+  full_name: string;
+  height: number;
+  goal_weight: number;
+  units: 'metric' | 'imperial';
+}
+
+// Unit Helpers (Database always stores metric: kg, cm)
+const toLbs = (kg: number) => kg * 2.20462;
+const fromLbs = (lbs: number) => lbs / 2.20462;
+const toIn = (cm: number) => cm / 2.54;
+const fromIn = (inches: number) => inches * 2.54;
+
+function AuthForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = isSignUp 
+      ? await supabase.auth.signUp({ email, password })
+      : await supabase.auth.signInWithPassword({ email, password });
+    
+    if (error) alert(error.message);
+    setLoading(false);
+  };
+
+  return (
+    <div className="auth-container">
+      <div className="auth-card">
+        <h1><Activity /> Fitness Tracker</h1>
+        <p>{isSignUp ? 'Create your account' : 'Sign in to your account'}</p>
+        <form onSubmit={handleAuth} className="auth-form">
+          <div className="form-group">
+            <label>Email</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          </div>
+          <div className="form-group">
+            <label>Password</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
+          </div>
+          <button type="submit" disabled={loading}>
+            {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+          </button>
+        </form>
+        <button className="text-btn" onClick={() => setIsSignUp(!isSignUp)}>
+          {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
+  const [session, setSession] = useState<any>(null);
+  const [view, setView] = useState<'dashboard' | 'settings'>('dashboard');
   const [food, setFood] = useState<FoodEntry[]>([]);
   const [exercise, setExercise] = useState<ExerciseEntry[]>([]);
   const [metrics, setMetrics] = useState<MetricsEntry[]>([]);
+  const [profile, setProfile] = useState<Profile>({ full_name: '', height: 0, goal_weight: 0, units: 'metric' });
   
   const [foodName, setFoodName] = useState('');
   const [foodCals, setFoodCals] = useState('');
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseCals, setExerciseCals] = useState('');
-  const [weight, setWeight] = useState('');
-  const [height, setHeight] = useState('');
+  const [weightInput, setWeightInput] = useState('');
+  const [heightInput, setHeightInput] = useState(''); // Used in settings
+  const [goalWeightInput, setGoalWeightInput] = useState(''); // Used in settings
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    fetchData();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (session) {
+      fetchData();
+      fetchProfile();
+    }
+  }, [session]);
 
   const fetchData = async () => {
     const { data: foodData } = await supabase.from('food').select('*').order('created_at', { ascending: false });
@@ -56,6 +135,25 @@ function App() {
     if (foodData) setFood(foodData);
     if (exerciseData) setExercise(exerciseData);
     if (metricsData) setMetrics(metricsData);
+  };
+
+  const fetchProfile = async () => {
+    const { data, error } = await supabase.from('profiles').select('*').maybeSingle();
+    if (data) {
+      setProfile(data);
+      if (data.height) {
+        const h = data.units === 'imperial' ? toIn(data.height) : data.height;
+        setHeightInput(h.toFixed(1));
+      }
+      if (data.goal_weight) {
+        const w = data.units === 'imperial' ? toLbs(data.goal_weight) : data.goal_weight;
+        setGoalWeightInput(w.toFixed(1));
+      }
+    } else if (!error && session) {
+      const newProfile = { id: session.user.id, full_name: '', height: 0, goal_weight: 0, units: 'metric' as const };
+      await supabase.from('profiles').upsert(newProfile);
+      setProfile(newProfile);
+    }
   };
 
   const addFood = async (e: React.FormEvent) => {
@@ -78,18 +176,55 @@ function App() {
 
   const addMetrics = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!weight || !height) return;
-    const w = parseFloat(weight);
-    const h = parseFloat(height) / 100;
-    const bmi = w / (h * h);
+    if (!weightInput) return;
+    
+    // Convert weight to metric for DB storage
+    const wKg = profile.units === 'imperial' ? fromLbs(parseFloat(weightInput)) : parseFloat(weightInput);
+    
+    // Use height from profile (already in metric)
+    const hCm = profile.height || 0;
+    
+    let bmi = 0;
+    if (hCm > 0) {
+      const hM = hCm / 100;
+      bmi = parseFloat((wKg / (hM * hM)).toFixed(1));
+    }
+    
     await supabase.from('metrics').insert([{ 
-      weight: w, 
-      height: parseFloat(height), 
-      bmi: parseFloat(bmi.toFixed(1)) 
+      weight: wKg, 
+      height: hCm, 
+      bmi: bmi 
     }]);
-    setWeight('');
-    setHeight('');
+    setWeightInput('');
     fetchData();
+  };
+
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.from('profiles').upsert({
+      id: session.user.id,
+      ...profile,
+      updated_at: new Date().toISOString()
+    });
+    if (!error) alert('Profile saved!');
+  };
+
+  const syncWithings = async () => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/withings-sync?user_id=${session.user.id}`);
+      const data = await response.json();
+      if (data.status === 'success') {
+        alert(`Sync complete! Metrics: ${data.metrics_synced}, Activities: ${data.activities_synced}`);
+        fetchData();
+      } else {
+        alert('Sync failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Sync failed. Please ensure your Withings account is connected.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const isToday = (dateString: string) => {
@@ -107,6 +242,28 @@ function App() {
   const totalBurnedToday = todayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
   const latestMetrics = metrics[0];
 
+  // Helper to get BMI, calculating on the fly if missing from record
+  const getBMI = (m: MetricsEntry | undefined) => {
+    if (!m) return null;
+    if (m.bmi && m.bmi > 0) return m.bmi;
+    
+    // Fallback: Calculate from profile height if record BMI is missing
+    if (profile.height > 0) {
+      const hM = profile.height / 100;
+      return parseFloat((m.weight / (hM * hM)).toFixed(1));
+    }
+    return null;
+  };
+
+  const displayWeight = (kg: number) => {
+    if (!kg) return '--';
+    const val = profile.units === 'imperial' ? toLbs(kg) : kg;
+    return val.toFixed(1);
+  };
+
+  const weightUnit = profile.units === 'imperial' ? 'lb' : 'kg';
+  const heightUnit = profile.units === 'imperial' ? 'in' : 'cm';
+
   const chartData = useMemo(() => {
     const last30Days = Array.from({ length: 30 }, (_, i) => {
       const d = new Date();
@@ -118,163 +275,293 @@ function App() {
       const dayFood = food.filter(f => f.created_at.startsWith(date));
       const dayExercise = exercise.filter(ex => ex.created_at.startsWith(date));
       const dayMetrics = metrics.find(m => m.created_at.startsWith(date));
+      
+      const weightVal = dayMetrics ? (profile.units === 'imperial' ? toLbs(dayMetrics.weight) : dayMetrics.weight) : null;
 
       return {
         date: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
         calories: dayFood.reduce((acc, curr) => acc + curr.calories, 0),
         burned: dayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0),
-        weight: dayMetrics?.weight || null
+        weight: weightVal ? parseFloat(weightVal.toFixed(1)) : null
       };
     });
-  }, [food, exercise, metrics]);
+  }, [food, exercise, metrics, profile.units]);
+
+  if (!session) {
+    return <AuthForm />;
+  }
+
+  const latestBMI = getBMI(latestMetrics);
 
   return (
     <div className="container">
-      <header>
-        <h1><Activity className="header-icon" /> Fitness Tracker</h1>
-        <p>Your Health Dashboard (Supabase Powered)</p>
+      <header className="main-header">
+        <div className="header-top">
+          <h1><Activity className="header-icon" /> Fitness Tracker</h1>
+          <div className="header-actions">
+            {view === 'dashboard' && (
+              <button className="icon-btn sync-btn" onClick={syncWithings} disabled={isSyncing}>
+                <RefreshCw className={isSyncing ? 'spin' : ''} size={18} />
+                <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
+              </button>
+            )}
+            <button className="icon-btn" onClick={() => setView(view === 'dashboard' ? 'settings' : 'dashboard')}>
+              {view === 'dashboard' ? <SettingsIcon size={18} /> : <ChevronLeft size={18} />}
+              <span>{view === 'dashboard' ? 'Settings' : 'Dashboard'}</span>
+            </button>
+            <button className="icon-btn logout-btn" onClick={() => supabase.auth.signOut()}>
+              <LogOut size={18} />
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+        <p className="user-welcome">Welcome back, {profile.full_name || session.user.email}</p>
       </header>
 
       <main>
-        <div className="dashboard">
-          <div className="card stat-card">
-            <Utensils className="icon food-icon" />
-            <div className="stat-content">
-              <h3>Calories Eaten</h3>
-              <p className="stat-value">{totalEatenToday}</p>
-              <p className="stat-label">kcal today</p>
-            </div>
-          </div>
-
-          <div className="card stat-card">
-            <Flame className="icon burn-icon" />
-            <div className="stat-content">
-              <h3>Calories Burned</h3>
-              <p className="stat-value">{totalBurnedToday}</p>
-              <p className="stat-label">kcal today</p>
-            </div>
-          </div>
-
-          <div className="card stat-card">
-            <Scale className="icon weight-icon" />
-            <div className="stat-content">
-              <h3>Current Weight</h3>
-              <p className="stat-value">{latestMetrics?.weight || '--'}</p>
-              <p className="stat-label">kg ({latestMetrics?.bmi ? `BMI: ${latestMetrics.bmi}` : 'Set height/weight'})</p>
-            </div>
-          </div>
-
-          <div className="card stat-card">
-            <TrendingUp className="icon net-icon" />
-            <div className="stat-content">
-              <h3>Net Calories</h3>
-              <p className="stat-value">{totalEatenToday - totalBurnedToday}</p>
-              <p className="stat-label">kcal today</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="forms-grid">
-          <section className="card">
-            <h2>Add Food</h2>
-            <form onSubmit={addFood}>
-              <input type="text" placeholder="What did you eat?" value={foodName} onChange={e => setFoodName(e.target.value)} />
-              <input type="number" placeholder="Calories" value={foodCals} onChange={e => setFoodCals(e.target.value)} />
-              <button type="submit"><Plus size={18} /> Add Entry</button>
-            </form>
-            <div className="log-list">
-              {todayFood.slice(0, 5).map(f => (
-                <div key={f.id} className="log-item">
-                  <span>{f.name}</span>
-                  <span className="log-value">{f.calories} kcal</span>
-                </div>
-              ))}
-              {todayFood.length === 0 && <p className="empty-msg">No entries for today</p>}
-            </div>
-          </section>
-
-          <section className="card">
-            <h2>Add Exercise</h2>
-            <form onSubmit={addExercise}>
-              <input type="text" placeholder="What activity?" value={exerciseName} onChange={e => setExerciseName(e.target.value)} />
-              <input type="number" placeholder="Calories Burned" value={exerciseCals} onChange={e => setExerciseCals(e.target.value)} />
-              <button type="submit"><Plus size={18} /> Add Entry</button>
-            </form>
-            <div className="log-list">
-              {todayExercise.slice(0, 5).map(ex => (
-                <div key={ex.id} className="log-item">
-                  <span>{ex.name}</span>
-                  <span className="log-value-negative">-{ex.calories_burned} kcal</span>
-                </div>
-              ))}
-              {todayExercise.length === 0 && <p className="empty-msg">No entries for today</p>}
-            </div>
-          </section>
-
-          <section className="card">
-            <h2>Track Metrics</h2>
-            <form onSubmit={addMetrics}>
-              <input type="number" step="0.1" placeholder="Weight (kg)" value={weight} onChange={e => setWeight(e.target.value)} />
-              <input type="number" placeholder="Height (cm)" value={height} onChange={e => setHeight(e.target.value)} />
-              <button type="submit" className="metrics-btn"><Scale size={18} /> Update Metrics</button>
-            </form>
-            {metrics.length > 0 && (
-              <div className="metrics-summary">
-                <div className="metric-row">
-                  <span>Last Weight:</span>
-                  <strong>{latestMetrics.weight} kg</strong>
-                </div>
-                <div className="metric-row">
-                  <span>Last BMI:</span>
-                  <strong className={latestMetrics.bmi > 25 ? 'bmi-high' : 'bmi-normal'}>{latestMetrics.bmi}</strong>
+        {view === 'dashboard' ? (
+          <>
+            <div className="dashboard">
+              <div className="card stat-card">
+                <Utensils className="icon food-icon" />
+                <div className="stat-content">
+                  <h3>Calories Eaten</h3>
+                  <p className="stat-value">{totalEatenToday}</p>
+                  <p className="stat-label">kcal today</p>
                 </div>
               </div>
-            )}
-          </section>
-        </div>
 
-        <section className="card chart-section">
-          <h2>Last 30 Days</h2>
-          <div className="charts-container">
-            <div className="chart-wrapper">
-              <h3>Calories & Activity</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient id="colorCals" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
-                    </linearGradient>
-                    <linearGradient id="colorBurned" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--danger)" stopOpacity={0.1}/>
-                      <stop offset="95%" stopColor="var(--danger)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="date" tick={{fontSize: 12}} />
-                  <YAxis tick={{fontSize: 12}} />
-                  <Tooltip />
-                  <Legend />
-                  <Area type="monotone" dataKey="calories" name="Eaten (kcal)" stroke="var(--primary)" fillOpacity={1} fill="url(#colorCals)" />
-                  <Area type="monotone" dataKey="burned" name="Burned (kcal)" stroke="var(--danger)" fillOpacity={1} fill="url(#colorBurned)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="card stat-card">
+                <Flame className="icon burn-icon" />
+                <div className="stat-content">
+                  <h3>Calories Burned</h3>
+                  <p className="stat-value">{totalBurnedToday}</p>
+                  <p className="stat-label">kcal today</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
+                <Scale className="icon weight-icon" />
+                <div className="stat-content">
+                  <h3>Current Weight</h3>
+                  <p className="stat-value">{displayWeight(latestMetrics?.weight)}</p>
+                  <p className="stat-label">{weightUnit} ({latestBMI ? `BMI: ${latestBMI}` : 'Set height in settings'})</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
+                <TrendingUp className="icon net-icon" />
+                <div className="stat-content">
+                  <h3>Net Calories</h3>
+                  <p className="stat-value">{totalEatenToday - totalBurnedToday}</p>
+                  <p className="stat-label">kcal today</p>
+                </div>
+              </div>
             </div>
 
-            <div className="chart-wrapper">
-              <h3>Weight Progress (kg)</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={chartData.filter(d => d.weight !== null)}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="date" tick={{fontSize: 12}} />
-                  <YAxis domain={['auto', 'auto']} tick={{fontSize: 12}} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="weight" name="Weight (kg)" stroke="var(--secondary)" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="forms-grid">
+              <section className="card">
+                <h2>Add Food</h2>
+                <form onSubmit={addFood}>
+                  <input type="text" placeholder="What did you eat?" value={foodName} onChange={e => setFoodName(e.target.value)} />
+                  <input type="number" placeholder="Calories" value={foodCals} onChange={e => setFoodCals(e.target.value)} />
+                  <button type="submit"><Plus size={18} /> Add Entry</button>
+                </form>
+                <div className="log-list">
+                  {todayFood.slice(0, 5).map(f => (
+                    <div key={f.id} className="log-item">
+                      <span>{f.name}</span>
+                      <span className="log-value">{f.calories} kcal</span>
+                    </div>
+                  ))}
+                  {todayFood.length === 0 && <p className="empty-msg">No entries for today</p>}
+                </div>
+              </section>
+
+              <section className="card">
+                <h2>Add Exercise</h2>
+                <form onSubmit={addExercise}>
+                  <input type="text" placeholder="What activity?" value={exerciseName} onChange={e => setExerciseName(e.target.value)} />
+                  <input type="number" placeholder="Calories Burned" value={exerciseCals} onChange={e => setExerciseCals(e.target.value)} />
+                  <button type="submit"><Plus size={18} /> Add Entry</button>
+                </form>
+                <div className="log-list">
+                  {todayExercise.slice(0, 5).map(ex => (
+                    <div key={ex.id} className="log-item">
+                      <span>{ex.name}</span>
+                      <span className="log-value-negative">-{ex.calories_burned} kcal</span>
+                    </div>
+                  ))}
+                  {todayExercise.length === 0 && <p className="empty-msg">No entries for today</p>}
+                </div>
+              </section>
+
+              <section className="card">
+                <h2>Track Metrics</h2>
+                <form onSubmit={addMetrics}>
+                  <input type="number" step="0.1" placeholder={`Daily Weight (${weightUnit})`} value={weightInput} onChange={e => setWeightInput(e.target.value)} />
+                  <button type="submit" className="metrics-btn"><Scale size={18} /> Log Weight</button>
+                </form>
+                {!profile.height && <p className="empty-msg" style={{marginTop: '1rem'}}>Note: BMI will be calculated once you set your height in settings.</p>}
+                {metrics.length > 0 && (
+                  <div className="metrics-summary">
+                    <div className="metric-row">
+                      <span>Last Weight:</span>
+                      <strong>{displayWeight(latestMetrics.weight)} {weightUnit}</strong>
+                    </div>
+                    <div className="metric-row">
+                      <span>Last BMI:</span>
+                      <strong className={latestBMI && latestBMI > 25 ? 'bmi-high' : 'bmi-normal'}>{latestBMI || '--'}</strong>
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
+
+            <section className="card chart-section">
+              <h2>Last 30 Days</h2>
+              <div className="charts-container">
+                <div className="chart-wrapper">
+                  <h3>Calories & Activity</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="colorCals" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                        </linearGradient>
+                        <linearGradient id="colorBurned" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="var(--danger)" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="var(--danger)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="date" tick={{fontSize: 12}} />
+                      <YAxis tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Legend />
+                      <Area type="monotone" dataKey="calories" name="Eaten (kcal)" stroke="var(--primary)" fillOpacity={1} fill="url(#colorCals)" />
+                      <Area type="monotone" dataKey="burned" name="Burned (kcal)" stroke="var(--danger)" fillOpacity={1} fill="url(#colorBurned)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="chart-wrapper">
+                  <h3>Weight Progress ({weightUnit})</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={chartData.filter(d => d.weight !== null)}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="date" tick={{fontSize: 12}} />
+                      <YAxis domain={['auto', 'auto']} tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="weight" name={`Weight (${weightUnit})`} stroke="var(--secondary)" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <div className="settings-view">
+            <section className="card">
+              <h2><UserIcon className="section-icon" /> Profile Settings</h2>
+              <form onSubmit={saveProfile}>
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input 
+                    type="text" 
+                    value={profile.full_name} 
+                    onChange={e => setProfile({...profile, full_name: e.target.value})}
+                    placeholder="John Doe"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label>Units</label>
+                  <div className="unit-toggle">
+                    <button 
+                      type="button" 
+                      className={profile.units === 'metric' ? 'active' : ''}
+                      onClick={() => {
+                        const currentUnits = profile.units;
+                        if (currentUnits === 'metric') {
+                          if (heightInput) setHeightInput(toIn(parseFloat(heightInput)).toFixed(1));
+                          if (goalWeightInput) setGoalWeightInput(toLbs(parseFloat(goalWeightInput)).toFixed(1));
+                        } else {
+                          if (heightInput) setHeightInput(fromIn(parseFloat(heightInput)).toFixed(1));
+                          if (goalWeightInput) setGoalWeightInput(fromLbs(parseFloat(goalWeightInput)).toFixed(1));
+                        }
+                        setProfile({...profile, units: 'metric'});
+                      }}
+                    >
+                      Metric (kg, cm)
+                    </button>
+                    <button 
+                      type="button" 
+                      className={profile.units === 'imperial' ? 'active' : ''}
+                      onClick={() => {
+                        const currentUnits = profile.units;
+                        if (currentUnits === 'metric') {
+                          if (heightInput) setHeightInput(toIn(parseFloat(heightInput)).toFixed(1));
+                          if (goalWeightInput) setGoalWeightInput(toLbs(parseFloat(goalWeightInput)).toFixed(1));
+                        }
+                        setProfile({...profile, units: 'imperial'});
+                      }}
+                    >
+                      Imperial (lb, in)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Height ({heightUnit})</label>
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    value={heightInput} 
+                    onChange={e => {
+                      setHeightInput(e.target.value);
+                      const val = parseFloat(e.target.value);
+                      const hCm = profile.units === 'imperial' ? fromIn(val) : val;
+                      setProfile({...profile, height: hCm});
+                    }}
+                    placeholder={profile.units === 'imperial' ? "70" : "180"}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Goal Weight ({weightUnit})</label>
+                  <input 
+                    type="number" 
+                    step="0.1"
+                    value={goalWeightInput} 
+                    onChange={e => {
+                      setGoalWeightInput(e.target.value);
+                      const val = parseFloat(e.target.value);
+                      const wKg = profile.units === 'imperial' ? fromLbs(val) : val;
+                      setProfile({...profile, goal_weight: wKg});
+                    }}
+                    placeholder={profile.units === 'imperial' ? "165" : "75"}
+                  />
+                </div>
+                <button type="submit" className="save-btn"><Save size={18} /> Save Settings</button>
+              </form>
+            </section>
+
+            <section className="card">
+              <h2>Withings Integration</h2>
+              <p className="settings-info">Connect your Withings account to sync weight and activity automatically.</p>
+              <button 
+                onClick={() => {
+                  const url = `https://account.withings.com/oauth2_user/authorize2?response_type=code&client_id=${import.meta.env.VITE_WITHINGS_CLIENT_ID}&scope=user.metrics,user.activity&redirect_uri=${import.meta.env.VITE_WITHINGS_REDIRECT_URI}&state=${session.user.id}`;
+                  window.location.href = url;
+                }}
+                className="connect-btn"
+              >
+                Reconnect Withings Account
+              </button>
+            </section>
           </div>
-        </section>
+        )}
       </main>
     </div>
   );
