@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Flame, Utensils, Scale, Activity, TrendingUp } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { 
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
+} from 'recharts';
 import './App.css';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -89,9 +92,41 @@ function App() {
     fetchData();
   };
 
-  const totalEaten = food.reduce((acc, curr) => acc + curr.calories, 0);
-  const totalBurned = exercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
+  const isToday = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+      date.getMonth() === today.getMonth() &&
+      date.getFullYear() === today.getFullYear();
+  };
+
+  const todayFood = food.filter(f => isToday(f.created_at));
+  const todayExercise = exercise.filter(ex => isToday(ex.created_at));
+  
+  const totalEatenToday = todayFood.reduce((acc, curr) => acc + curr.calories, 0);
+  const totalBurnedToday = todayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
   const latestMetrics = metrics[0];
+
+  const chartData = useMemo(() => {
+    const last30Days = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (29 - i));
+      return d.toISOString().split('T')[0];
+    });
+
+    return last30Days.map(date => {
+      const dayFood = food.filter(f => f.created_at.startsWith(date));
+      const dayExercise = exercise.filter(ex => ex.created_at.startsWith(date));
+      const dayMetrics = metrics.find(m => m.created_at.startsWith(date));
+
+      return {
+        date: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        calories: dayFood.reduce((acc, curr) => acc + curr.calories, 0),
+        burned: dayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0),
+        weight: dayMetrics?.weight || null
+      };
+    });
+  }, [food, exercise, metrics]);
 
   return (
     <div className="container">
@@ -106,7 +141,7 @@ function App() {
             <Utensils className="icon food-icon" />
             <div className="stat-content">
               <h3>Calories Eaten</h3>
-              <p className="stat-value">{totalEaten}</p>
+              <p className="stat-value">{totalEatenToday}</p>
               <p className="stat-label">kcal today</p>
             </div>
           </div>
@@ -115,7 +150,7 @@ function App() {
             <Flame className="icon burn-icon" />
             <div className="stat-content">
               <h3>Calories Burned</h3>
-              <p className="stat-value">{totalBurned}</p>
+              <p className="stat-value">{totalBurnedToday}</p>
               <p className="stat-label">kcal today</p>
             </div>
           </div>
@@ -133,8 +168,8 @@ function App() {
             <TrendingUp className="icon net-icon" />
             <div className="stat-content">
               <h3>Net Calories</h3>
-              <p className="stat-value">{totalEaten - totalBurned}</p>
-              <p className="stat-label">kcal total</p>
+              <p className="stat-value">{totalEatenToday - totalBurnedToday}</p>
+              <p className="stat-label">kcal today</p>
             </div>
           </div>
         </div>
@@ -148,12 +183,13 @@ function App() {
               <button type="submit"><Plus size={18} /> Add Entry</button>
             </form>
             <div className="log-list">
-              {food.slice(0, 5).map(f => (
+              {todayFood.slice(0, 5).map(f => (
                 <div key={f.id} className="log-item">
                   <span>{f.name}</span>
                   <span className="log-value">{f.calories} kcal</span>
                 </div>
               ))}
+              {todayFood.length === 0 && <p className="empty-msg">No entries for today</p>}
             </div>
           </section>
 
@@ -165,19 +201,20 @@ function App() {
               <button type="submit"><Plus size={18} /> Add Entry</button>
             </form>
             <div className="log-list">
-              {exercise.slice(0, 5).map(ex => (
+              {todayExercise.slice(0, 5).map(ex => (
                 <div key={ex.id} className="log-item">
                   <span>{ex.name}</span>
                   <span className="log-value-negative">-{ex.calories_burned} kcal</span>
                 </div>
               ))}
+              {todayExercise.length === 0 && <p className="empty-msg">No entries for today</p>}
             </div>
           </section>
 
           <section className="card">
             <h2>Track Metrics</h2>
             <form onSubmit={addMetrics}>
-              <input type="number" placeholder="Weight (kg)" value={weight} onChange={e => setWeight(e.target.value)} />
+              <input type="number" step="0.1" placeholder="Weight (kg)" value={weight} onChange={e => setWeight(e.target.value)} />
               <input type="number" placeholder="Height (cm)" value={height} onChange={e => setHeight(e.target.value)} />
               <button type="submit" className="metrics-btn"><Scale size={18} /> Update Metrics</button>
             </form>
@@ -195,6 +232,49 @@ function App() {
             )}
           </section>
         </div>
+
+        <section className="card chart-section">
+          <h2>Last 30 Days</h2>
+          <div className="charts-container">
+            <div className="chart-wrapper">
+              <h3>Calories & Activity</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorCals" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorBurned" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--danger)" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="var(--danger)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="date" tick={{fontSize: 12}} />
+                  <YAxis tick={{fontSize: 12}} />
+                  <Tooltip />
+                  <Legend />
+                  <Area type="monotone" dataKey="calories" name="Eaten (kcal)" stroke="var(--primary)" fillOpacity={1} fill="url(#colorCals)" />
+                  <Area type="monotone" dataKey="burned" name="Burned (kcal)" stroke="var(--danger)" fillOpacity={1} fill="url(#colorBurned)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="chart-wrapper">
+              <h3>Weight Progress (kg)</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={chartData.filter(d => d.weight !== null)}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="date" tick={{fontSize: 12}} />
+                  <YAxis domain={['auto', 'auto']} tick={{fontSize: 12}} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="weight" name="Weight (kg)" stroke="var(--secondary)" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
   );

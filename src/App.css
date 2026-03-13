@@ -51,7 +51,7 @@ header p {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1.5rem;
-  margin-bottom: 3rem;
+  margin-bottom: 2rem;
 }
 
 .card {
@@ -97,10 +97,28 @@ header p {
   margin: 0;
 }
 
+.chart-section {
+  margin-bottom: 3rem;
+}
+
+.charts-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 2rem;
+}
+
+.chart-wrapper h3 {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
 .forms-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2rem;
+  margin-bottom: 3rem;
 }
 
 h2 {
@@ -181,6 +199,13 @@ button:hover {
   color: var(--danger);
 }
 
+.empty-msg {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+  text-align: center;
+}
+
 .metrics-summary {
   margin-top: 1.5rem;
   padding: 1rem;
@@ -196,3 +221,9 @@ button:hover {
 
 .bmi-normal { color: var(--primary-dark); }
 .bmi-high { color: var(--danger); }
+
+@media (max-width: 600px) {
+  .charts-container {
+    grid-template-columns: 1fr;
+  }
+}
