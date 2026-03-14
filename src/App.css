@@ -375,6 +375,48 @@ button:hover {
   transform: none;
 }
 
+.input-with-action {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.input-with-action input {
+  flex: 1;
+}
+
+.action-btn {
+  background: #f5f3ff;
+  color: #8b5cf6;
+  border: 1px solid #ddd6fe;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: #ede9fe;
+  border-color: #8b5cf6;
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pulse {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .5; }
+}
+
 .auth-form {
   display: flex;
   flex-direction: column;

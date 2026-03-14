@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw } from 'lucide-react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -102,9 +102,10 @@ function App() {
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseCals, setExerciseCals] = useState('');
   const [weightInput, setWeightInput] = useState('');
-  const [heightInput, setHeightInput] = useState(''); // Used in settings
-  const [goalWeightInput, setGoalWeightInput] = useState(''); // Used in settings
+  const [heightInput, setHeightInput] = useState('');
+  const [goalWeightInput, setGoalWeightInput] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isEstimating, setIsEstimating] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -165,6 +166,24 @@ function App() {
     fetchData();
   };
 
+  const estimateCalories = async () => {
+    if (!foodName) return;
+    setIsEstimating(true);
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/estimate-calories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({ foodDescription: foodName })
+      });
+      const data = await response.json();
+      if (data.calories) setFoodCals(data.calories.toString());
+    } catch (err) {
+      console.error('Estimation failed', err);
+    } finally {
+      setIsEstimating(false);
+    }
+  };
+
   const addExercise = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!exerciseName || !exerciseCals) return;
@@ -178,10 +197,7 @@ function App() {
     e.preventDefault();
     if (!weightInput) return;
     
-    // Convert weight to metric for DB storage
     const wKg = profile.units === 'imperial' ? fromLbs(parseFloat(weightInput)) : parseFloat(weightInput);
-    
-    // Use height from profile (already in metric)
     const hCm = profile.height || 0;
     
     let bmi = 0;
@@ -242,12 +258,9 @@ function App() {
   const totalBurnedToday = todayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
   const latestMetrics = metrics[0];
 
-  // Helper to get BMI, calculating on the fly if missing from record
   const getBMI = (m: MetricsEntry | undefined) => {
     if (!m) return null;
     if (m.bmi && m.bmi > 0) return m.bmi;
-    
-    // Fallback: Calculate from profile height if record BMI is missing
     if (profile.height > 0) {
       const hM = profile.height / 100;
       return parseFloat((m.weight / (hM * hM)).toFixed(1));
@@ -363,7 +376,12 @@ function App() {
               <section className="card">
                 <h2>Add Food</h2>
                 <form onSubmit={addFood}>
-                  <input type="text" placeholder="What did you eat?" value={foodName} onChange={e => setFoodName(e.target.value)} />
+                  <div className="input-with-action">
+                    <input type="text" placeholder="What did you eat?" value={foodName} onChange={e => setFoodName(e.target.value)} />
+                    <button type="button" className="action-btn" onClick={estimateCalories} disabled={!foodName || isEstimating} title="Estimate calories with AI">
+                      <Sparkles className={isEstimating ? 'pulse' : ''} size={18} />
+                    </button>
+                  </div>
                   <input type="number" placeholder="Calories" value={foodCals} onChange={e => setFoodCals(e.target.value)} />
                   <button type="submit"><Plus size={18} /> Add Entry</button>
                 </form>
