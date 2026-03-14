@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_API_KEY')
-// Updated to the current 2026 stable standard model: gemini-2.5-flash
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
 serve(async (req) => {
@@ -26,9 +25,9 @@ serve(async (req) => {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Estimate the number of calories in the following food description: "${foodDescription}". 
-            Return ONLY a single integer representing the total calorie count. 
-            If you cannot estimate, return 0.`
+            text: `Estimate the number of calories and grams of carbohydrates in the following food description: "${foodDescription}". 
+            Return ONLY a JSON object with the following structure: {"calories": integer, "carbs": integer}. 
+            If you cannot estimate, return 0 for both values.`
           }]
         }]
       })
@@ -43,10 +42,12 @@ serve(async (req) => {
       })
     }
 
-    const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text || "0"
-    const calories = parseInt(textResult.replace(/[^0-9]/g, '')) || 0
+    const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}"
+    // Extract JSON from potentially markdown-wrapped text
+    const jsonMatch = textResult.match(/\{.*\}/);
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { calories: 0, carbs: 0 };
 
-    return new Response(JSON.stringify({ calories }), {
+    return new Response(JSON.stringify(result), {
       headers: { 
         'Content-Type': 'application/json', 
         'Access-Control-Allow-Origin': '*' 

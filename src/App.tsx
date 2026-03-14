@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles } from 'lucide-react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { Auth } from '@supabase/auth-ui-react';
+import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
 } from 'recharts';
@@ -14,6 +16,7 @@ interface FoodEntry {
   id: number;
   name: string;
   calories: number;
+  carbs: number;
   created_at: string;
 }
 
@@ -99,6 +102,7 @@ function App() {
   
   const [foodName, setFoodName] = useState('');
   const [foodCals, setFoodCals] = useState('');
+  const [foodCarbs, setFoodCarbs] = useState('');
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseCals, setExerciseCals] = useState('');
   const [weightInput, setWeightInput] = useState('');
@@ -160,9 +164,14 @@ function App() {
   const addFood = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!foodName || !foodCals) return;
-    await supabase.from('food').insert([{ name: foodName, calories: parseInt(foodCals) }]);
+    await supabase.from('food').insert([{ 
+      name: foodName, 
+      calories: parseInt(foodCals),
+      carbs: parseInt(foodCarbs || '0')
+    }]);
     setFoodName('');
     setFoodCals('');
+    setFoodCarbs('');
     fetchData();
   };
 
@@ -176,7 +185,8 @@ function App() {
         body: JSON.stringify({ foodDescription: foodName })
       });
       const data = await response.json();
-      if (data.calories) setFoodCals(data.calories.toString());
+      if (data.calories !== undefined) setFoodCals(data.calories.toString());
+      if (data.carbs !== undefined) setFoodCarbs(data.carbs.toString());
     } catch (err) {
       console.error('Estimation failed', err);
     } finally {
@@ -255,6 +265,7 @@ function App() {
   const todayExercise = exercise.filter(ex => isToday(ex.created_at));
   
   const totalEatenToday = todayFood.reduce((acc, curr) => acc + curr.calories, 0);
+  const totalCarbsToday = todayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0);
   const totalBurnedToday = todayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
   const latestMetrics = metrics[0];
 
@@ -294,6 +305,7 @@ function App() {
       return {
         date: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
         calories: dayFood.reduce((acc, curr) => acc + curr.calories, 0),
+        carbs: dayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0),
         burned: dayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0),
         weight: weightVal ? parseFloat(weightVal.toFixed(1)) : null
       };
@@ -345,6 +357,15 @@ function App() {
               </div>
 
               <div className="card stat-card">
+                <Wheat className="icon carb-icon" />
+                <div className="stat-content">
+                  <h3>Carbs</h3>
+                  <p className="stat-value">{totalCarbsToday}</p>
+                  <p className="stat-label">g today</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
                 <Flame className="icon burn-icon" />
                 <div className="stat-content">
                   <h3>Calories Burned</h3>
@@ -378,17 +399,23 @@ function App() {
                 <form onSubmit={addFood}>
                   <div className="input-with-action">
                     <input type="text" placeholder="What did you eat?" value={foodName} onChange={e => setFoodName(e.target.value)} />
-                    <button type="button" className="action-btn" onClick={estimateCalories} disabled={!foodName || isEstimating} title="Estimate calories with AI">
+                    <button type="button" className="action-btn" onClick={estimateCalories} disabled={!foodName || isEstimating} title="Estimate calories & carbs with AI">
                       <Sparkles className={isEstimating ? 'pulse' : ''} size={18} />
                     </button>
                   </div>
-                  <input type="number" placeholder="Calories" value={foodCals} onChange={e => setFoodCals(e.target.value)} />
+                  <div className="input-row">
+                    <input type="number" placeholder="Calories" value={foodCals} onChange={e => setFoodCals(e.target.value)} />
+                    <input type="number" placeholder="Carbs (g)" value={foodCarbs} onChange={e => setFoodCarbs(e.target.value)} />
+                  </div>
                   <button type="submit"><Plus size={18} /> Add Entry</button>
                 </form>
                 <div className="log-list">
                   {todayFood.slice(0, 5).map(f => (
                     <div key={f.id} className="log-item">
-                      <span>{f.name}</span>
+                      <div className="log-info">
+                        <span>{f.name}</span>
+                        {f.carbs > 0 && <span className="log-subvalue">{f.carbs}g carbs</span>}
+                      </div>
                       <span className="log-value">{f.calories} kcal</span>
                     </div>
                   ))}
@@ -440,7 +467,7 @@ function App() {
               <h2>Last 30 Days</h2>
               <div className="charts-container">
                 <div className="chart-wrapper">
-                  <h3>Calories & Activity</h3>
+                  <h3>Calories, Activity & Carbs</h3>
                   <ResponsiveContainer width="100%" height={300}>
                     <AreaChart data={chartData}>
                       <defs>
@@ -452,6 +479,10 @@ function App() {
                           <stop offset="5%" stopColor="var(--danger)" stopOpacity={0.1}/>
                           <stop offset="95%" stopColor="var(--danger)" stopOpacity={0}/>
                         </linearGradient>
+                        <linearGradient id="colorCarbs" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
                       <XAxis dataKey="date" tick={{fontSize: 12}} />
@@ -460,6 +491,7 @@ function App() {
                       <Legend />
                       <Area type="monotone" dataKey="calories" name="Eaten (kcal)" stroke="var(--primary)" fillOpacity={1} fill="url(#colorCals)" />
                       <Area type="monotone" dataKey="burned" name="Burned (kcal)" stroke="var(--danger)" fillOpacity={1} fill="url(#colorBurned)" />
+                      <Line type="monotone" dataKey="carbs" name="Carbs (g)" stroke="#f59e0b" strokeWidth={2} dot={false} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>

@@ -117,7 +117,7 @@ body {
 
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
@@ -143,6 +143,7 @@ body {
 }
 
 .food-icon { color: var(--primary); background: #ecfdf5; }
+.carb-icon { color: #f59e0b; background: #fffbeb; }
 .burn-icon { color: var(--danger); background: #fef2f2; }
 .weight-icon { color: var(--secondary); background: #eff6ff; }
 .net-icon { color: #8b5cf6; background: #f5f3ff; }
@@ -232,6 +233,16 @@ input:focus {
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
+.input-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.input-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 button {
   background: var(--primary);
   color: white;
@@ -275,9 +286,20 @@ button:hover {
 .log-item {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border);
   font-size: 0.9375rem;
+}
+
+.log-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.log-subvalue {
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 .log-value {
