@@ -2,6 +2,7 @@
   "name": "fitness-tracker",
   "private": true,
   "version": "0.0.0",
+  "description": "A modern health dashboard powered by React, Supabase, and Google Gemini AI. Features AI-powered calorie estimation, Withings integration, and real-time fitness tracking.",
   "type": "module",
   "scripts": {
     "dev": "vite",

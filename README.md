@@ -1,6 +1,6 @@
 # Fitness Tracker
 
-A modern, full-stack health dashboard powered by **React**, **Supabase**, and **Google Gemini AI**. Track your nutrition, activity, and weight with automated syncing and AI-powered insights.
+A modern health dashboard powered by React, Supabase, and Google Gemini AI. Features AI-powered calorie estimation, Withings integration, and real-time fitness tracking.
 
 ## ✨ Features
 
@@ -22,7 +22,10 @@ A modern, full-stack health dashboard powered by **React**, **Supabase**, and **
 
 ### 1. Database & Auth
 - Run the commands in `setup.sql` in your **Supabase SQL Editor** to create the tables and enable RLS policies.
-- Enable **Email Auth** in the Supabase Dashboard.
+- **Security:** New sign-ups are disabled by a database trigger for security. To add your own account:
+  1. Go to **Authentication > Users** in the Supabase Dashboard.
+  2. Click **Add User** and create your account manually.
+  3. Alternatively, you can temporarily disable the `block_new_users` trigger in the SQL editor.
 
 ### 2. Environment Variables
 Create a `.env` file in the root directory:
@@ -52,13 +55,6 @@ npx supabase functions deploy estimate-calories --no-verify-jwt
 npm install
 npm run dev
 ```
-
-## 🌐 Deployment
-
-This project is optimized for deployment on **Vercel**:
-1. Connect your GitHub repository.
-2. Add all `VITE_` environment variables.
-3. Vercel will automatically build and deploy the Vite app.
 
 ## ⚖️ License
 MIT

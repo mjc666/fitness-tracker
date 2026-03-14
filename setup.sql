@@ -65,3 +65,20 @@ create policy "Users can manage own metrics" on metrics for all using (auth.uid(
 
 alter table withings_auth enable row level security;
 create policy "Users can manage own withings_auth" on withings_auth for all using (auth.uid() = user_id);
+
+-- Disable all new sign-ups via database trigger
+create or replace function block_signup()
+returns trigger
+language plpgsql
+security definer
+as $$
+begin
+  raise exception 'New sign-ups are currently disabled.';
+end;
+$$;
+
+create trigger block_new_users
+before insert on auth.users
+for each row execute function block_signup();
+
+

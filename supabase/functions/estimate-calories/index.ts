@@ -25,29 +25,40 @@ serve(async (req) => {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Estimate the number of calories and grams of carbohydrates in the following food description: "${foodDescription}". 
-            Return ONLY a JSON object with the following structure: {"calories": integer, "carbs": integer}. 
-            If you cannot estimate, return 0 for both values.`
+            text: `Estimate calories and carbohydrates for: "${foodDescription}". Return JSON.`
           }]
-        }]
+        }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "object",
+            properties: {
+              calories: { type: "number" },
+              carbs: { type: "number" }
+            },
+            required: ["calories", "carbs"]
+          }
+        }
       })
     })
 
     const data = await geminiResponse.json()
+    console.log('Gemini raw response:', JSON.stringify(data))
 
     if (data.error) {
-      return new Response(JSON.stringify({ error: data.error.message, code: data.error.code }), { 
+      return new Response(JSON.stringify({ error: data.error.message }), { 
         status: 500,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       })
     }
 
     const textResult = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}"
-    // Extract JSON from potentially markdown-wrapped text
-    const jsonMatch = textResult.match(/\{.*\}/);
-    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { calories: 0, carbs: 0 };
+    const result = JSON.parse(textResult);
 
-    return new Response(JSON.stringify(result), {
+    return new Response(JSON.stringify({
+      calories: Math.round(result.calories || 0),
+      carbs: Math.round(result.carbs || 0)
+    }), {
       headers: { 
         'Content-Type': 'application/json', 
         'Access-Control-Allow-Origin': '*' 
@@ -55,6 +66,7 @@ serve(async (req) => {
     })
 
   } catch (err) {
+    console.error('Estimation error:', err);
     return new Response(JSON.stringify({ error: err.message }), { 
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }

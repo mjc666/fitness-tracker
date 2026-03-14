@@ -51,14 +51,11 @@ function AuthForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = isSignUp 
-      ? await supabase.auth.signUp({ email, password })
-      : await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     
     if (error) alert(error.message);
     setLoading(false);
@@ -68,7 +65,7 @@ function AuthForm() {
     <div className="auth-container">
       <div className="auth-card">
         <h1><Activity /> Fitness Tracker</h1>
-        <p>{isSignUp ? 'Create your account' : 'Sign in to your account'}</p>
+        <p>Sign in to your account</p>
         <form onSubmit={handleAuth} className="auth-form">
           <div className="form-group">
             <label>Email</label>
@@ -79,12 +76,9 @@ function AuthForm() {
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} required />
           </div>
           <button type="submit" disabled={loading}>
-            {loading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+            {loading ? 'Signing In...' : 'Sign In'}
           </button>
         </form>
-        <button className="text-btn" onClick={() => setIsSignUp(!isSignUp)}>
-          {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-        </button>
       </div>
     </div>
   );
