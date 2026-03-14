@@ -7,7 +7,16 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
 const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
   try {
     const { searchParams } = new URL(req.url)
     let userId = searchParams.get('user_id')
@@ -21,7 +30,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!userId) return new Response(JSON.stringify({ error: 'User ID required' }), { status: 400 })
+    if (!userId) return new Response(JSON.stringify({ error: 'User ID required' }), { 
+      status: 400, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    })
 
     // 1. Get the auth record for THIS specific user
     const { data: auth, error: authError } = await supabase
@@ -32,7 +44,10 @@ Deno.serve(async (req) => {
       .limit(1)
       .single()
 
-    if (authError || !auth) return new Response(JSON.stringify({ error: 'Auth not found' }), { status: 400 })
+    if (authError || !auth) return new Response(JSON.stringify({ error: 'Auth not found' }), { 
+      status: 400, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    })
 
     let accessToken = auth.access_token
     const expiresAt = new Date(auth.expires_at)
@@ -133,9 +148,12 @@ Deno.serve(async (req) => {
       status: 'success',
       metrics_synced: mAdded,
       activities_synced: aAdded
-    }), { headers: { 'Content-Type': 'application/json' } })
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 })
+    return new Response(JSON.stringify({ error: err.message }), { 
+      status: 500, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    })
   }
 })

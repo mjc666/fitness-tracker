@@ -230,16 +230,25 @@ function App() {
   const syncWithings = async () => {
     setIsSyncing(true);
     try {
-      const response = await fetch(`${supabaseUrl}/functions/v1/withings-sync?user_id=${session.user.id}`);
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const response = await fetch(`${supabaseUrl}/functions/v1/withings-sync?user_id=${session.user.id}`, {
+        headers: {
+          'Authorization': `Bearer ${currentSession?.access_token}`
+        }
+      });
       const data = await response.json();
       if (data.status === 'success') {
         alert(`Sync complete! Metrics: ${data.metrics_synced}, Activities: ${data.activities_synced}`);
         fetchData();
       } else {
-        alert('Sync failed: ' + (data.error || 'Unknown error'));
+        if (data.error === 'Auth not found') {
+          alert('Sync failed: Withings account not connected. Please go to Settings to connect.');
+        } else {
+          alert('Sync failed: ' + (data.error || 'Unknown error'));
+        }
       }
     } catch (err) {
-      alert('Sync failed. Please ensure your Withings account is connected.');
+      alert('Sync failed. Please check your internet connection and try again.');
     } finally {
       setIsSyncing(false);
     }

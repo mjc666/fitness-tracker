@@ -13,8 +13,13 @@ Deno.serve(async (req) => {
   const code = searchParams.get('code')
   const state = searchParams.get('state') // We pass the user_id as state
 
+  console.log(`OAuth Callback received. Code: ${code ? 'Yes' : 'No'}, State: ${state}`)
+
   if (!code || !state) {
-    return new Response(JSON.stringify({ error: 'No code or user_id provided' }), {
+    return new Response(JSON.stringify({ 
+      error: 'No code or user_id provided', 
+      received: { code: !!code, state } 
+    }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
@@ -30,7 +35,7 @@ Deno.serve(async (req) => {
       client_id: CLIENT_ID!,
       client_secret: CLIENT_SECRET!,
       code: code,
-      redirect_uri: `https://${new URL(req.url).hostname}/functions/v1/withings-oauth`,
+      redirect_uri: Deno.env.get('WITHINGS_REDIRECT_URI') || `https://${new URL(req.url).hostname}/functions/v1/withings-oauth`,
     }),
   })
 
