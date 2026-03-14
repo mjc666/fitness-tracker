@@ -1,73 +1,64 @@
-# React + TypeScript + Vite
+# Fitness Tracker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern, full-stack health dashboard powered by **React**, **Supabase**, and **Google Gemini AI**. Track your nutrition, activity, and weight with automated syncing and AI-powered insights.
 
-Currently, two official plugins are available:
+## ✨ Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **AI Calorie Estimator:** Describe what you ate in natural language (e.g., "a handful of almonds") and let **Gemini 2.5 Flash** estimate the calories for you.
+- **Withings Integration:** Automatically sync weight and physical activity data from your Withings "Body+" scale and wearables.
+- **Dynamic Dashboard:** Real-time totals for calories eaten, burned, and net energy balance.
+- **Progress Charts:** Visual 30-day trends for weight and activity using **Recharts**.
+- **User Profiles:** Support for both **Metric (kg/cm)** and **Imperial (lb/in)** units with automatic conversion.
+- **Secure Authentication:** Multi-user support with Supabase Auth and Row Level Security (RLS).
 
-## React Compiler
+## 🚀 Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend:** React 19, Vite, TypeScript, Lucide Icons, Recharts.
+- **Backend:** Supabase (Database, Auth, Edge Functions).
+- **AI:** Google Gemini 2.5 Flash API.
+- **API Integrations:** Withings OAuth 2.0.
 
-## Expanding the ESLint configuration
+## 🛠️ Setup & Installation
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 1. Database & Auth
+- Run the commands in `setup.sql` in your **Supabase SQL Editor** to create the tables and enable RLS policies.
+- Enable **Email Auth** in the Supabase Dashboard.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 2. Environment Variables
+Create a `.env` file in the root directory:
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_WITHINGS_CLIENT_ID=your_withings_client_id
+VITE_WITHINGS_REDIRECT_URI=https://your-project.supabase.co/functions/v1/withings-oauth
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 3. Supabase Edge Functions
+Set the following secrets in your Supabase project:
+```bash
+npx supabase secrets set GOOGLE_AI_API_KEY=your_gemini_key
+npx supabase secrets set WITHINGS_CLIENT_ID=your_withings_id
+npx supabase secrets set WITHINGS_CLIENT_SECRET=your_withings_secret
 ```
+Deploy the functions:
+```bash
+npx supabase functions deploy withings-oauth --no-verify-jwt
+npx supabase functions deploy withings-sync --no-verify-jwt
+npx supabase functions deploy estimate-calories --no-verify-jwt
+```
+
+### 4. Frontend Development
+```bash
+npm install
+npm run dev
+```
+
+## 🌐 Deployment
+
+This project is optimized for deployment on **Vercel**:
+1. Connect your GitHub repository.
+2. Add all `VITE_` environment variables.
+3. Vercel will automatically build and deploy the Vite app.
+
+## ⚖️ License
+MIT
