@@ -18,7 +18,6 @@ export default defineConfig({
         name: 'Fitness Tracker',
         short_name: 'Fitness',
         description: 'Modern health and nutrition dashboard',
-        version: '1.1.0',
         theme_color: '#10b981',
         background_color: '#f8fafc',
         display: 'standalone',
