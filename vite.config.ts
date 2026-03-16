@@ -9,10 +9,16 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       includeAssets: ['icon.svg'],
+      workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+      },
       manifest: {
         name: 'Fitness Tracker',
         short_name: 'Fitness',
         description: 'Modern health and nutrition dashboard',
+        version: '1.1.0',
         theme_color: '#10b981',
         background_color: '#f8fafc',
         display: 'standalone',
