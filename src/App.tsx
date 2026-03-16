@@ -276,7 +276,7 @@ function App() {
       });
       const data = await response.json();
       if (data.status === 'success') {
-        let msg = `Sync complete! Metrics: ${data.metrics_synced}, Activities: ${data.activities_synced}, Steps: ${data.steps_synced}`;
+        let msg = `Sync complete! Metrics: ${data.metrics_synced}, Activities: ${data.activities_synced}, Steps: ${data.steps_synced}, HR: ${data.hr_synced}`;
         if (data.debug) {
           msg += `\nDebug: ${data.debug.activity_count} activities found. Last date: ${data.debug.last_activity?.date || 'N/A'}`;
         }

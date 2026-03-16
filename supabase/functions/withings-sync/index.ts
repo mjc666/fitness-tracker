@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
         access_token: accessToken,
         startdateymd: thirtyDaysAgo,
         enddateymd: today,
-        data_fields: 'calories,steps,heart_rate',
+        data_fields: 'calories,steps,hr', // "hr" is the correct field for getactivity
       }),
     })
     const actData = await actRes.json()
@@ -141,8 +141,11 @@ Deno.serve(async (req) => {
         }
         aggregated[act.date].steps += (act.steps || 0)
         aggregated[act.date].calories += (act.calories || 0)
-        if (act.heart_rate) {
-          aggregated[act.date].hr += act.heart_rate
+        
+        // Withings might return heart rate as 'heart_rate' or 'hr_average' depending on the API version/device
+        const hrValue = act.hr_average || act.heart_rate || act.hr;
+        if (hrValue) {
+          aggregated[act.date].hr += hrValue
           aggregated[act.date].hr_count += 1
         }
       }
@@ -199,7 +202,11 @@ Deno.serve(async (req) => {
       metrics_synced: mAdded,
       activities_synced: aAdded,
       steps_synced: sAdded,
-      hr_synced: hAdded
+      hr_synced: hAdded,
+      debug: {
+        activity_count: actData.body?.activities?.length || 0,
+        last_activity: actData.body?.activities?.[actData.body.activities.length - 1]
+      }
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
