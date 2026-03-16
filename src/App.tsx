@@ -278,7 +278,9 @@ function App() {
       if (data.status === 'success') {
         let msg = `Sync complete! Metrics: ${data.metrics_synced}, Activities: ${data.activities_synced}, Steps: ${data.steps_synced}, HR: ${data.hr_synced}`;
         if (data.debug) {
-          msg += `\nDebug: ${data.debug.activity_count} activities found. Last date: ${data.debug.last_activity?.date || 'N/A'}`;
+          msg += `\nDebug: Status ${data.debug.activity_status}, Count ${data.debug.activity_count}`;
+          if (data.debug.activity_error) msg += `\nError: ${data.debug.activity_error}`;
+          if (data.debug.last_activity) msg += `\nLast date: ${data.debug.last_activity.date}`;
         }
         alert(msg);
         fetchData();
