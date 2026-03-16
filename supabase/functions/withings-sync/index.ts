@@ -119,7 +119,8 @@ Deno.serve(async (req) => {
     // Activity fetch
     const today = new Date().toISOString().split('T')[0]
     const thirtyDaysAgo = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
-    const actRes = await fetch('https://wbsapi.withings.net/v2/measure', {
+    
+    let actRes = await fetch('https://wbsapi.withings.net/v2/measure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -127,10 +128,27 @@ Deno.serve(async (req) => {
         access_token: accessToken,
         startdateymd: thirtyDaysAgo,
         enddateymd: today,
-        data_fields: 'calories,steps,hr',
+        data_fields: 'calories,steps,hr_average', // "hr_average" is the correct field for getactivity
       }),
     })
-    const actData = await actRes.json()
+    let actData = await actRes.json()
+    
+    // Fallback if heart rate data is not supported for this user/device
+    if (actData.status === 503 || (actData.status === 400 && actData.error?.includes('hr_average'))) {
+      console.log('Heart rate not supported, falling back to steps and calories only')
+      actRes = await fetch('https://wbsapi.withings.net/v2/measure', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          action: 'getactivity',
+          access_token: accessToken,
+          startdateymd: thirtyDaysAgo,
+          enddateymd: today,
+          data_fields: 'calories,steps',
+        }),
+      })
+      actData = await actRes.json()
+    }
     
     const aggregated: Record<string, { steps: number, calories: number, hr: number, hr_count: number }> = {}
     
