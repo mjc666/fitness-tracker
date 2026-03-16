@@ -128,14 +128,12 @@ Deno.serve(async (req) => {
         access_token: accessToken,
         startdateymd: thirtyDaysAgo,
         enddateymd: today,
-        data_fields: 'calories,steps,hr_average', // "hr_average" is the correct field for getactivity
+        data_fields: 'calories,steps,hr_average',
       }),
     })
     let actData = await actRes.json()
     
-    // Fallback if heart rate data is not supported for this user/device
     if (actData.status === 503 || (actData.status === 400 && actData.error?.includes('hr_average'))) {
-      console.log('Heart rate not supported, falling back to steps and calories only')
       actRes = await fetch('https://wbsapi.withings.net/v2/measure', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -175,9 +173,8 @@ Deno.serve(async (req) => {
     for (const [date, data] of Object.entries(aggregated)) {
       const timestamp = `${date}T12:00:00Z`
       
-      // Sync Calories
       if (data.calories > 0) {
-        const { error } = await supabase.from('exercise').upsert({
+        await supabase.from('exercise').upsert({
           user_id: userId,
           name: 'Withings Activity',
           calories_burned: Math.round(data.calories),
@@ -185,32 +182,30 @@ Deno.serve(async (req) => {
           source: 'withings',
           external_id: `with_a_${date}`
         }, { onConflict: 'external_id' })
-        if (!error) aAdded++
+        aAdded++
       }
 
-      // Sync Steps
       if (data.steps > 0) {
-        const { error } = await supabase.from('steps').upsert({
+        await supabase.from('steps').upsert({
           user_id: userId,
           count: data.steps,
           created_at: timestamp,
           source: 'withings',
           external_id: `with_s_${date}`
         }, { onConflict: 'external_id' })
-        if (!error) sAdded++
+        sAdded++
       }
 
-      // Sync Heart Rate
       if (data.hr_count > 0) {
         const avgHr = Math.round(data.hr / data.hr_count)
-        const { error } = await supabase.from('heart_rate').upsert({
+        await supabase.from('heart_rate').upsert({
           user_id: userId,
           bpm: avgHr,
           created_at: timestamp,
           source: 'withings',
           external_id: `with_h_${date}`
         }, { onConflict: 'external_id' })
-        if (!error) hAdded++
+        hAdded++
       }
     }
 
@@ -219,13 +214,7 @@ Deno.serve(async (req) => {
       metrics_synced: mAdded,
       activities_synced: aAdded,
       steps_synced: sAdded,
-      hr_synced: hAdded,
-      debug: {
-        activity_status: actData.status,
-        activity_error: actData.error,
-        activity_count: actData.body?.activities?.length || 0,
-        last_activity: actData.body?.activities?.[actData.body.activities.length - 1]
-      }
+      hr_synced: hAdded
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
