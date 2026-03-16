@@ -28,7 +28,6 @@ Deno.serve(async (req) => {
       if (!authError && user) {
         userId = user.id
       } else if (authHeader.startsWith('Bearer ')) {
-        // If they provided a token but it's invalid, reject it
         return new Response(JSON.stringify({ error: 'Invalid token' }), { 
           status: 401, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -41,7 +40,6 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })
 
-    // 1. Get the auth record for THIS specific user
     const { data: auth, error: authError } = await supabase
       .from('withings_auth')
       .select('*')
@@ -105,11 +103,14 @@ Deno.serve(async (req) => {
         const m = group.measures.find((m: any) => m.type === 1)
         if (m) {
           const val = m.value * Math.pow(10, m.unit)
+          // Store with date only for better grouping in some systems, 
+          // but our frontend likes timestamps. Let's use midnight local-ish for consistency.
+          const dateStr = new Date(group.date * 1000).toISOString().split('T')[0]
           const { error } = await supabase.from('metrics').upsert({
             user_id: userId,
             weight: parseFloat(val.toFixed(2)),
             height: 0, bmi: 0,
-            created_at: new Date(group.date * 1000).toISOString(),
+            created_at: dateStr + 'T00:00:00', // Local-ish midnight
             source: 'withings',
             external_id: `with_w_${group.grpid}`
           }, { onConflict: 'external_id' })
@@ -133,34 +134,47 @@ Deno.serve(async (req) => {
       }),
     })
     const actData = await actRes.json()
-    let aAdded = 0
-    let sAdded = 0
+    
+    // Aggregate activities by date (Withings sometimes returns multiple entries per day)
+    const aggregated: Record<string, { steps: number, calories: number }> = {}
+    
     if (actData.status === 0 && actData.body.activities) {
       for (const act of actData.body.activities) {
-        // Sync Calories to exercise table
-        if (act.calories > 0) {
-          const { error } = await supabase.from('exercise').upsert({
-            user_id: userId,
-            name: 'Withings Activity',
-            calories_burned: Math.round(act.calories),
-            created_at: act.date + 'T12:00:00Z',
-            source: 'withings',
-            external_id: `with_a_${act.date}`
-          }, { onConflict: 'external_id' })
-          if (!error) aAdded++
+        if (!aggregated[act.date]) {
+          aggregated[act.date] = { steps: 0, calories: 0 }
         }
+        aggregated[act.date].steps += (act.steps || 0)
+        aggregated[act.date].calories += (act.calories || 0)
+      }
+    }
 
-        // Sync Steps to steps table
-        if (act.steps > 0) {
-          const { error } = await supabase.from('steps').upsert({
-            user_id: userId,
-            count: act.steps,
-            created_at: act.date + 'T12:00:00Z',
-            source: 'withings',
-            external_id: `with_s_${act.date}`
-          }, { onConflict: 'external_id' })
-          if (!error) sAdded++
-        }
+    let aAdded = 0
+    let sAdded = 0
+    
+    for (const [date, data] of Object.entries(aggregated)) {
+      // Sync Calories
+      if (data.calories > 0) {
+        const { error } = await supabase.from('exercise').upsert({
+          user_id: userId,
+          name: 'Withings Activity',
+          calories_burned: Math.round(data.calories),
+          created_at: date + 'T00:00:00',
+          source: 'withings',
+          external_id: `with_a_${date}`
+        }, { onConflict: 'external_id' })
+        if (!error) aAdded++
+      }
+
+      // Sync Steps
+      if (data.steps > 0) {
+        const { error } = await supabase.from('steps').upsert({
+          user_id: userId,
+          count: data.steps,
+          created_at: date + 'T00:00:00',
+          source: 'withings',
+          external_id: `with_s_${date}`
+        }, { onConflict: 'external_id' })
+        if (!error) sAdded++
       }
     }
 
