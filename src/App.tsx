@@ -264,12 +264,11 @@ function App() {
 
   const todayFood = food.filter(f => isToday(f.created_at));
   const todayExercise = exercise.filter(ex => isToday(ex.created_at));
-  
+
   const totalEatenToday = todayFood.reduce((acc, curr) => acc + curr.calories, 0);
   const totalCarbsToday = todayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0);
   const totalBurnedToday = todayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
   const latestMetrics = metrics[0];
-
   const getBMI = (m: MetricsEntry | undefined) => {
     if (!m) return null;
     if (m.bmi && m.bmi > 0) return m.bmi;
@@ -293,18 +292,35 @@ function App() {
     const last30Days = Array.from({ length: 30 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (29 - i));
-      return d.toISOString().split('T')[0];
+      // Use local date string YYYY-MM-DD
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     });
 
     return last30Days.map(date => {
-      const dayFood = food.filter(f => f.created_at.startsWith(date));
-      const dayExercise = exercise.filter(ex => ex.created_at.startsWith(date));
-      const dayMetrics = metrics.find(m => m.created_at.startsWith(date));
+      const dayFood = food.filter(f => {
+        const fDate = new Date(f.created_at);
+        const fStr = `${fDate.getFullYear()}-${String(fDate.getMonth() + 1).padStart(2, '0')}-${String(fDate.getDate()).padStart(2, '0')}`;
+        return fStr === date;
+      });
+      const dayExercise = exercise.filter(ex => {
+        const exDate = new Date(ex.created_at);
+        const exStr = `${exDate.getFullYear()}-${String(exDate.getMonth() + 1).padStart(2, '0')}-${String(exDate.getDate()).padStart(2, '0')}`;
+        return exStr === date;
+      });
+      const dayMetrics = metrics.find(m => {
+        const mDate = new Date(m.created_at);
+        const mStr = `${mDate.getFullYear()}-${String(mDate.getMonth() + 1).padStart(2, '0')}-${String(mDate.getDate()).padStart(2, '0')}`;
+        return mStr === date;
+      });
       
       const weightVal = dayMetrics ? (profile.units === 'imperial' ? toLbs(dayMetrics.weight) : dayMetrics.weight) : null;
 
+      // Use a consistent label format
+      const [y, m, d] = date.split('-');
+      const labelDate = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+
       return {
-        date: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        date: labelDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
         calories: dayFood.reduce((acc, curr) => acc + curr.calories, 0),
         carbs: dayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0),
         burned: dayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0),
