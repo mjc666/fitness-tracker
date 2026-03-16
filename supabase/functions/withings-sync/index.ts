@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const startSecs = Math.floor((Date.now() - (365 * 24 * 60 * 60 * 1000)) / 1000)
+    const startSecs = Math.floor((Date.now() - (30 * 24 * 60 * 60 * 1000)) / 1000)
     
     // Weight fetch
     const weightRes = await fetch('https://wbsapi.withings.net/measure', {
@@ -114,14 +114,14 @@ Deno.serve(async (req) => {
 
     // Activity fetch
     const today = new Date().toISOString().split('T')[0]
-    const yearAgo = new Date(Date.now() - (365 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
+    const thirtyDaysAgo = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
     const actRes = await fetch('https://wbsapi.withings.net/v2/measure', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         action: 'getactivity',
         access_token: accessToken,
-        startdateymd: yearAgo,
+        startdateymd: thirtyDaysAgo,
         enddateymd: today,
         data_fields: 'calories',
       }),
