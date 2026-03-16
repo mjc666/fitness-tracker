@@ -148,6 +148,7 @@ body {
 .weight-icon { color: var(--secondary); background: #eff6ff; }
 .net-icon { color: #8b5cf6; background: #f5f3ff; }
 .steps-icon { color: #10b981; background: #ecfdf5; }
+.hr-icon { color: #ec4899; background: #fdf2f8; }
 
 .stat-content h3 {
   font-size: 0.875rem;

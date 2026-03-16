@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints } from 'lucide-react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -36,6 +36,12 @@ interface MetricsEntry {
 interface StepsEntry {
   id: number;
   count: number;
+  created_at: string;
+}
+
+interface HeartRateEntry {
+  id: number;
+  bpm: number;
   created_at: string;
 }
 
@@ -97,6 +103,7 @@ function App() {
   const [exercise, setExercise] = useState<ExerciseEntry[]>([]);
   const [metrics, setMetrics] = useState<MetricsEntry[]>([]);
   const [steps, setSteps] = useState<StepsEntry[]>([]);
+  const [heartRate, setHeartRate] = useState<HeartRateEntry[]>([]);
   const [profile, setProfile] = useState<Profile>({ full_name: '', height: 0, goal_weight: 0, units: 'metric' });
   
   const [foodName, setFoodName] = useState('');
@@ -137,11 +144,13 @@ function App() {
     const { data: exerciseData } = await supabase.from('exercise').select('*').order('created_at', { ascending: false });
     const { data: metricsData } = await supabase.from('metrics').select('*').order('created_at', { ascending: false });
     const { data: stepsData } = await supabase.from('steps').select('*').order('created_at', { ascending: false });
+    const { data: hrData } = await supabase.from('heart_rate').select('*').order('created_at', { ascending: false });
 
     if (foodData) setFood(foodData);
     if (exerciseData) setExercise(exerciseData);
     if (metricsData) setMetrics(metricsData);
     if (stepsData) setSteps(stepsData);
+    if (hrData) setHeartRate(hrData);
   };
 
   const fetchProfile = async () => {
@@ -298,12 +307,14 @@ function App() {
   const todayFood = food.filter(f => isToday(f.created_at));
   const todayExercise = exercise.filter(ex => isToday(ex.created_at));
   const todayStepsRecord = steps.find(s => isToday(s.created_at));
+  const todayHRRecord = heartRate.find(h => isToday(h.created_at));
 
   const totalEatenToday = todayFood.reduce((acc, curr) => acc + curr.calories, 0);
   const totalCarbsToday = todayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0);
   const totalBurnedToday = todayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
   const totalStepsToday = todayStepsRecord ? todayStepsRecord.count : 0;
   const latestMetrics = metrics[0];
+  const latestHR = heartRate[0];
   const getBMI = (m: MetricsEntry | undefined) => {
     if (!m) return null;
     if (m.bmi && m.bmi > 0) return m.bmi;
@@ -353,6 +364,12 @@ function App() {
         const sStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`;
         return sStr === date;
       });
+
+      const dayHR = heartRate.find(h => {
+        const hDate = new Date(h.created_at);
+        const hStr = `${hDate.getFullYear()}-${String(hDate.getMonth() + 1).padStart(2, '0')}-${String(hDate.getDate()).padStart(2, '0')}`;
+        return hStr === date;
+      });
       
       const weightVal = dayMetrics ? (profile.units === 'imperial' ? toLbs(dayMetrics.weight) : dayMetrics.weight) : null;
 
@@ -366,10 +383,11 @@ function App() {
         carbs: dayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0),
         burned: dayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0),
         weight: weightVal ? parseFloat(weightVal.toFixed(1)) : null,
-        steps: daySteps ? daySteps.count : 0
+        steps: daySteps ? daySteps.count : 0,
+        hr: dayHR ? dayHR.bpm : null
       };
     });
-  }, [food, exercise, metrics, steps, profile.units]);
+  }, [food, exercise, metrics, steps, heartRate, profile.units]);
 
   if (!session) {
     return <AuthForm />;
@@ -457,6 +475,15 @@ function App() {
                   <h3>Steps</h3>
                   <p className="stat-value">{totalStepsToday.toLocaleString()}</p>
                   <p className="stat-label">steps today</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
+                <Heart className="icon hr-icon" />
+                <div className="stat-content">
+                  <h3>Heart Rate</h3>
+                  <p className="stat-value">{todayHRRecord ? todayHRRecord.bpm : (latestHR ? latestHR.bpm : '--')}</p>
+                  <p className="stat-label">avg bpm</p>
                 </div>
               </div>
             </div>
@@ -598,6 +625,19 @@ function App() {
                       <Tooltip />
                       <Area type="monotone" dataKey="steps" name="Steps" stroke="#10b981" fillOpacity={1} fill="url(#colorSteps)" />
                     </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="chart-wrapper">
+                  <h3>Heart Rate Progress (bpm)</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={chartData.filter(d => d.hr !== null)}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="date" tick={{fontSize: 12}} />
+                      <YAxis domain={['auto', 'auto']} tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="hr" name="Avg HR (bpm)" stroke="#ec4899" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
+                    </LineChart>
                   </ResponsiveContainer>
                 </div>
               </div>

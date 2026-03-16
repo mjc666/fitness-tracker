@@ -102,13 +102,12 @@ Deno.serve(async (req) => {
         const m = group.measures.find((m: any) => m.type === 1)
         if (m) {
           const val = m.value * Math.pow(10, m.unit)
-          // Use ISO string directly to avoid timezone confusion
-          const createdAt = new Date(group.date * 1000).toISOString()
+          const dateStr = new Date(group.date * 1000).toISOString().split('T')[0]
           const { error } = await supabase.from('metrics').upsert({
             user_id: userId,
             weight: parseFloat(val.toFixed(2)),
             height: 0, bmi: 0,
-            created_at: createdAt,
+            created_at: dateStr + 'T12:00:00Z',
             source: 'withings',
             external_id: `with_w_${group.grpid}`
           }, { onConflict: 'external_id' })
@@ -128,28 +127,32 @@ Deno.serve(async (req) => {
         access_token: accessToken,
         startdateymd: thirtyDaysAgo,
         enddateymd: today,
-        data_fields: 'calories,steps',
+        data_fields: 'calories,steps,heart_rate',
       }),
     })
     const actData = await actRes.json()
     
-    const aggregated: Record<string, { steps: number, calories: number }> = {}
+    const aggregated: Record<string, { steps: number, calories: number, hr: number, hr_count: number }> = {}
     
     if (actData.status === 0 && actData.body.activities) {
       for (const act of actData.body.activities) {
         if (!aggregated[act.date]) {
-          aggregated[act.date] = { steps: 0, calories: 0 }
+          aggregated[act.date] = { steps: 0, calories: 0, hr: 0, hr_count: 0 }
         }
         aggregated[act.date].steps += (act.steps || 0)
         aggregated[act.date].calories += (act.calories || 0)
+        if (act.heart_rate) {
+          aggregated[act.date].hr += act.heart_rate
+          aggregated[act.date].hr_count += 1
+        }
       }
     }
 
     let aAdded = 0
     let sAdded = 0
+    let hAdded = 0
     
     for (const [date, data] of Object.entries(aggregated)) {
-      // Use T12:00:00Z to ensure it stays on the same calendar day regardless of timezone shift
       const timestamp = `${date}T12:00:00Z`
       
       // Sync Calories
@@ -176,6 +179,19 @@ Deno.serve(async (req) => {
         }, { onConflict: 'external_id' })
         if (!error) sAdded++
       }
+
+      // Sync Heart Rate
+      if (data.hr_count > 0) {
+        const avgHr = Math.round(data.hr / data.hr_count)
+        const { error } = await supabase.from('heart_rate').upsert({
+          user_id: userId,
+          bpm: avgHr,
+          created_at: timestamp,
+          source: 'withings',
+          external_id: `with_h_${date}`
+        }, { onConflict: 'external_id' })
+        if (!error) hAdded++
+      }
     }
 
     return new Response(JSON.stringify({
@@ -183,10 +199,7 @@ Deno.serve(async (req) => {
       metrics_synced: mAdded,
       activities_synced: aAdded,
       steps_synced: sAdded,
-      debug: {
-        activity_count: actData.body?.activities?.length || 0,
-        last_activity: actData.body?.activities?.[actData.body.activities.length - 1]
-      }
+      hr_synced: hAdded
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
