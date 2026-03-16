@@ -400,22 +400,18 @@ entrypoint = "./functions/withings-oauth/index.ts"
 
 [functions.withings-sync]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/withings-sync/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/withings-sync/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/withings-sync/*.html" ]
 
 [functions.estimate-calories]
 enabled = true
-verify_jwt = true
+verify_jwt = false
 import_map = "./functions/estimate-calories/deno.json"
-# Uncomment to specify a custom file path to the entrypoint.
-# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/estimate-calories/index.ts"
-# Specifies static files to be bundled with the function. Supports glob patterns.
-# For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/estimate-calories/*.html" ]
+
+[functions.estimate-exercise]
+enabled = true
+verify_jwt = false
+import_map = "./functions/estimate-exercise/deno.json"
+entrypoint = "./functions/estimate-exercise/index.ts"

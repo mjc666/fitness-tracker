@@ -21,16 +21,22 @@ Deno.serve(async (req) => {
     const { searchParams } = new URL(req.url)
     let userId = searchParams.get('user_id')
 
-    // If no user_id in params, try to get from Auth header (if provided)
-    if (!userId) {
-      const authHeader = req.headers.get('Authorization')
-      if (authHeader) {
-        const { data: { user } } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
-        userId = user?.id
+    // Always try to get user from Auth header first for security
+    const authHeader = req.headers.get('Authorization')
+    if (authHeader) {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+      if (!authError && user) {
+        userId = user.id
+      } else if (authHeader.startsWith('Bearer ')) {
+        // If they provided a token but it's invalid, reject it
+        return new Response(JSON.stringify({ error: 'Invalid token' }), { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        })
       }
     }
 
-    if (!userId) return new Response(JSON.stringify({ error: 'User ID required' }), { 
+    if (!userId) return new Response(JSON.stringify({ error: 'User ID required or unauthorized' }), { 
       status: 400, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })
