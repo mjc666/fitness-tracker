@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat } from 'lucide-react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -30,6 +30,12 @@ interface MetricsEntry {
   weight: number;
   height: number;
   bmi: number;
+  created_at: string;
+}
+
+interface StepsEntry {
+  id: number;
+  count: number;
   created_at: string;
 }
 
@@ -90,6 +96,7 @@ function App() {
   const [food, setFood] = useState<FoodEntry[]>([]);
   const [exercise, setExercise] = useState<ExerciseEntry[]>([]);
   const [metrics, setMetrics] = useState<MetricsEntry[]>([]);
+  const [steps, setSteps] = useState<StepsEntry[]>([]);
   const [profile, setProfile] = useState<Profile>({ full_name: '', height: 0, goal_weight: 0, units: 'metric' });
   
   const [foodName, setFoodName] = useState('');
@@ -129,10 +136,12 @@ function App() {
     const { data: foodData } = await supabase.from('food').select('*').order('created_at', { ascending: false });
     const { data: exerciseData } = await supabase.from('exercise').select('*').order('created_at', { ascending: false });
     const { data: metricsData } = await supabase.from('metrics').select('*').order('created_at', { ascending: false });
+    const { data: stepsData } = await supabase.from('steps').select('*').order('created_at', { ascending: false });
 
     if (foodData) setFood(foodData);
     if (exerciseData) setExercise(exerciseData);
     if (metricsData) setMetrics(metricsData);
+    if (stepsData) setSteps(stepsData);
   };
 
   const fetchProfile = async () => {
@@ -284,10 +293,12 @@ function App() {
 
   const todayFood = food.filter(f => isToday(f.created_at));
   const todayExercise = exercise.filter(ex => isToday(ex.created_at));
+  const todayStepsRecord = steps.find(s => isToday(s.created_at));
 
   const totalEatenToday = todayFood.reduce((acc, curr) => acc + curr.calories, 0);
   const totalCarbsToday = todayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0);
   const totalBurnedToday = todayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0);
+  const totalStepsToday = todayStepsRecord ? todayStepsRecord.count : 0;
   const latestMetrics = metrics[0];
   const getBMI = (m: MetricsEntry | undefined) => {
     if (!m) return null;
@@ -332,6 +343,12 @@ function App() {
         const mStr = `${mDate.getFullYear()}-${String(mDate.getMonth() + 1).padStart(2, '0')}-${String(mDate.getDate()).padStart(2, '0')}`;
         return mStr === date;
       });
+
+      const daySteps = steps.find(s => {
+        const sDate = new Date(s.created_at);
+        const sStr = `${sDate.getFullYear()}-${String(sDate.getMonth() + 1).padStart(2, '0')}-${String(sDate.getDate()).padStart(2, '0')}`;
+        return sStr === date;
+      });
       
       const weightVal = dayMetrics ? (profile.units === 'imperial' ? toLbs(dayMetrics.weight) : dayMetrics.weight) : null;
 
@@ -344,10 +361,11 @@ function App() {
         calories: dayFood.reduce((acc, curr) => acc + curr.calories, 0),
         carbs: dayFood.reduce((acc, curr) => acc + (curr.carbs || 0), 0),
         burned: dayExercise.reduce((acc, curr) => acc + curr.calories_burned, 0),
-        weight: weightVal ? parseFloat(weightVal.toFixed(1)) : null
+        weight: weightVal ? parseFloat(weightVal.toFixed(1)) : null,
+        steps: daySteps ? daySteps.count : 0
       };
     });
-  }, [food, exercise, metrics, profile.units]);
+  }, [food, exercise, metrics, steps, profile.units]);
 
   if (!session) {
     return <AuthForm />;
@@ -426,6 +444,15 @@ function App() {
                   <h3>Net Calories</h3>
                   <p className="stat-value">{totalEatenToday - totalBurnedToday}</p>
                   <p className="stat-label">kcal today</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
+                <Footprints className="icon steps-icon" />
+                <div className="stat-content">
+                  <h3>Steps</h3>
+                  <p className="stat-value">{totalStepsToday.toLocaleString()}</p>
+                  <p className="stat-label">steps today</p>
                 </div>
               </div>
             </div>
@@ -548,6 +575,25 @@ function App() {
                       <Tooltip />
                       <Line type="monotone" dataKey="weight" name={`Weight (${weightUnit})`} stroke="var(--secondary)" strokeWidth={2} dot={{ r: 4 }} activeDot={{ r: 6 }} connectNulls />
                     </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="chart-wrapper">
+                  <h3>Steps Progress</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="colorSteps" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                      <XAxis dataKey="date" tick={{fontSize: 12}} />
+                      <YAxis tick={{fontSize: 12}} />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="steps" name="Steps" stroke="#10b981" fillOpacity={1} fill="url(#colorSteps)" />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </div>

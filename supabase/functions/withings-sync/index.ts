@@ -123,13 +123,15 @@ Deno.serve(async (req) => {
         access_token: accessToken,
         startdateymd: thirtyDaysAgo,
         enddateymd: today,
-        data_fields: 'calories',
+        data_fields: 'calories,steps',
       }),
     })
     const actData = await actRes.json()
     let aAdded = 0
+    let sAdded = 0
     if (actData.status === 0 && actData.body.activities) {
       for (const act of actData.body.activities) {
+        // Sync Calories to exercise table
         if (act.calories > 0) {
           const { error } = await supabase.from('exercise').upsert({
             user_id: userId,
@@ -141,13 +143,26 @@ Deno.serve(async (req) => {
           }, { onConflict: 'external_id' })
           if (!error) aAdded++
         }
+
+        // Sync Steps to steps table
+        if (act.steps > 0) {
+          const { error } = await supabase.from('steps').upsert({
+            user_id: userId,
+            count: act.steps,
+            created_at: act.date + 'T12:00:00Z',
+            source: 'withings',
+            external_id: `with_s_${act.date}`
+          }, { onConflict: 'external_id' })
+          if (!error) sAdded++
+        }
       }
     }
 
     return new Response(JSON.stringify({
       status: 'success',
       metrics_synced: mAdded,
-      activities_synced: aAdded
+      activities_synced: aAdded,
+      steps_synced: sAdded
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {

@@ -147,6 +147,7 @@ body {
 .burn-icon { color: var(--danger); background: #fef2f2; }
 .weight-icon { color: var(--secondary); background: #eff6ff; }
 .net-icon { color: #8b5cf6; background: #f5f3ff; }
+.steps-icon { color: #10b981; background: #ecfdf5; }
 
 .stat-content h3 {
   font-size: 0.875rem;
