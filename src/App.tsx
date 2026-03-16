@@ -102,6 +102,7 @@ function App() {
   const [goalWeightInput, setGoalWeightInput] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isEstimating, setIsEstimating] = useState(false);
+  const [isEstimatingExercise, setIsEstimatingExercise] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -183,6 +184,25 @@ function App() {
       console.error('Estimation failed', err);
     } finally {
       setIsEstimating(false);
+    }
+  };
+
+  const estimateExercise = async () => {
+    if (!exerciseName) return;
+    setIsEstimatingExercise(true);
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const response = await fetch(`${supabaseUrl}/functions/v1/estimate-exercise`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentSession?.access_token}` },
+        body: JSON.stringify({ activityDescription: exerciseName })
+      });
+      const data = await response.json();
+      if (data.calories !== undefined) setExerciseCals(data.calories.toString());
+    } catch (err) {
+      console.error('Estimation failed', err);
+    } finally {
+      setIsEstimatingExercise(false);
     }
   };
 
@@ -443,7 +463,12 @@ function App() {
               <section className="card">
                 <h2>Add Exercise</h2>
                 <form onSubmit={addExercise}>
-                  <input type="text" placeholder="What activity?" value={exerciseName} onChange={e => setExerciseName(e.target.value)} />
+                  <div className="input-with-action">
+                    <input type="text" placeholder="What activity?" value={exerciseName} onChange={e => setExerciseName(e.target.value)} />
+                    <button type="button" className="action-btn" onClick={estimateExercise} disabled={!exerciseName || isEstimatingExercise} title="Estimate calories with AI">
+                      <Sparkles className={isEstimatingExercise ? 'pulse' : ''} size={18} />
+                    </button>
+                  </div>
                   <input type="number" placeholder="Calories Burned" value={exerciseCals} onChange={e => setExerciseCals(e.target.value)} />
                   <button type="submit"><Plus size={18} /> Add Entry</button>
                 </form>
