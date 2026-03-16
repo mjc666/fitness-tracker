@@ -146,6 +146,7 @@ body {
 .carb-icon { color: #f59e0b; background: #fffbeb; }
 .burn-icon { color: var(--danger); background: #fef2f2; }
 .weight-icon { color: var(--secondary); background: #eff6ff; }
+.bmr-icon { color: #f59e0b; background: #fffbeb; }
 .net-icon { color: #8b5cf6; background: #f5f3ff; }
 .steps-icon { color: #10b981; background: #ecfdf5; }
 .hr-icon { color: #ec4899; background: #fdf2f8; }
@@ -343,6 +344,15 @@ button:hover {
   gap: 2rem;
   max-width: 600px;
   margin: 0 auto;
+}
+
+.form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.form-row .form-group {
+  flex: 1;
 }
 
 .settings-info {

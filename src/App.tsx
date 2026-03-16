@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart } from 'lucide-react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -51,6 +51,8 @@ interface Profile {
   height: number;
   goal_weight: number;
   units: 'metric' | 'imperial';
+  birthday?: string;
+  gender?: 'male' | 'female';
 }
 
 // Unit Helpers (Database always stores metric: kg, cm)
@@ -58,6 +60,28 @@ const toLbs = (kg: number) => kg * 2.20462;
 const fromLbs = (lbs: number) => lbs / 2.20462;
 const toIn = (cm: number) => cm / 2.54;
 const fromIn = (inches: number) => inches * 2.54;
+
+const calculateAge = (birthday: string) => {
+  if (!birthday) return 0;
+  const birthDate = new Date(birthday);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
+const calculateBMR = (weight: number, height: number, birthday: string, gender: 'male' | 'female' | undefined) => {
+  if (!weight || !height || !birthday || !gender) return null;
+  const age = calculateAge(birthday);
+  if (gender === 'male') {
+    return Math.round(10 * weight + 6.25 * height - 5 * age + 5);
+  } else {
+    return Math.round(10 * weight + 6.25 * height - 5 * age - 161);
+  }
+};
 
 function AuthForm() {
   const [email, setEmail] = useState('');
@@ -104,7 +128,7 @@ function App() {
   const [metrics, setMetrics] = useState<MetricsEntry[]>([]);
   const [steps, setSteps] = useState<StepsEntry[]>([]);
   const [heartRate, setHeartRate] = useState<HeartRateEntry[]>([]);
-  const [profile, setProfile] = useState<Profile>({ full_name: '', height: 0, goal_weight: 0, units: 'metric' });
+  const [profile, setProfile] = useState<Profile>({ full_name: '', height: 0, goal_weight: 0, units: 'metric', birthday: '', gender: undefined });
   
   const [foodName, setFoodName] = useState('');
   const [foodCals, setFoodCals] = useState('');
@@ -166,7 +190,7 @@ function App() {
         setGoalWeightInput(w.toFixed(1));
       }
     } else if (!error && session) {
-      const newProfile = { id: session.user.id, full_name: '', height: 0, goal_weight: 0, units: 'metric' as const };
+      const newProfile = { id: session.user.id, full_name: '', height: 0, goal_weight: 0, units: 'metric' as const, birthday: '', gender: undefined };
       await supabase.from('profiles').upsert(newProfile);
       setProfile(newProfile);
     }
@@ -390,6 +414,7 @@ function App() {
   }
 
   const latestBMI = getBMI(latestMetrics);
+  const bmr = calculateBMR(latestMetrics?.weight, profile.height, profile.birthday || '', profile.gender);
 
   return (
     <div className="container">
@@ -462,6 +487,15 @@ function App() {
                   <h3>Net Calories</h3>
                   <p className="stat-value">{totalEatenToday - totalBurnedToday}</p>
                   <p className="stat-label">kcal today</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
+                <Zap className="icon bmr-icon" />
+                <div className="stat-content">
+                  <h3>BMR</h3>
+                  <p className="stat-value">{bmr || '--'}</p>
+                  <p className="stat-label">kcal/day (estimated)</p>
                 </div>
               </div>
 
@@ -652,6 +686,28 @@ function App() {
                     onChange={e => setProfile({...profile, full_name: e.target.value})}
                     placeholder="John Doe"
                   />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Birthday</label>
+                    <input 
+                      type="date" 
+                      value={profile.birthday || ''} 
+                      onChange={e => setProfile({...profile, birthday: e.target.value})}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Gender</label>
+                    <select 
+                      value={profile.gender || ''} 
+                      onChange={e => setProfile({...profile, gender: e.target.value as 'male' | 'female'})}
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </div>
                 </div>
                 
                 <div className="form-group">
