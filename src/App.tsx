@@ -267,7 +267,11 @@ function App() {
       });
       const data = await response.json();
       if (data.status === 'success') {
-        alert(`Sync complete! Metrics: ${data.metrics_synced}, Activities: ${data.activities_synced}`);
+        let msg = `Sync complete! Metrics: ${data.metrics_synced}, Activities: ${data.activities_synced}, Steps: ${data.steps_synced}`;
+        if (data.debug) {
+          msg += `\nDebug: ${data.debug.activity_count} activities found. Last date: ${data.debug.last_activity?.date || 'N/A'}`;
+        }
+        alert(msg);
         fetchData();
       } else {
         if (data.error === 'Auth not found') {

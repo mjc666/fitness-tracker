@@ -21,7 +21,6 @@ Deno.serve(async (req) => {
     const { searchParams } = new URL(req.url)
     let userId = searchParams.get('user_id')
 
-    // Always try to get user from Auth header first for security
     const authHeader = req.headers.get('Authorization')
     if (authHeader) {
       const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
@@ -35,7 +34,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!userId) return new Response(JSON.stringify({ error: 'User ID required or unauthorized' }), { 
+    if (!userId) return new Response(JSON.stringify({ error: 'User ID required' }), { 
       status: 400, 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
     })
@@ -103,14 +102,13 @@ Deno.serve(async (req) => {
         const m = group.measures.find((m: any) => m.type === 1)
         if (m) {
           const val = m.value * Math.pow(10, m.unit)
-          // Store with date only for better grouping in some systems, 
-          // but our frontend likes timestamps. Let's use midnight local-ish for consistency.
-          const dateStr = new Date(group.date * 1000).toISOString().split('T')[0]
+          // Use ISO string directly to avoid timezone confusion
+          const createdAt = new Date(group.date * 1000).toISOString()
           const { error } = await supabase.from('metrics').upsert({
             user_id: userId,
             weight: parseFloat(val.toFixed(2)),
             height: 0, bmi: 0,
-            created_at: dateStr + 'T00:00:00', // Local-ish midnight
+            created_at: createdAt,
             source: 'withings',
             external_id: `with_w_${group.grpid}`
           }, { onConflict: 'external_id' })
@@ -135,7 +133,6 @@ Deno.serve(async (req) => {
     })
     const actData = await actRes.json()
     
-    // Aggregate activities by date (Withings sometimes returns multiple entries per day)
     const aggregated: Record<string, { steps: number, calories: number }> = {}
     
     if (actData.status === 0 && actData.body.activities) {
@@ -152,13 +149,16 @@ Deno.serve(async (req) => {
     let sAdded = 0
     
     for (const [date, data] of Object.entries(aggregated)) {
+      // Use T12:00:00Z to ensure it stays on the same calendar day regardless of timezone shift
+      const timestamp = `${date}T12:00:00Z`
+      
       // Sync Calories
       if (data.calories > 0) {
         const { error } = await supabase.from('exercise').upsert({
           user_id: userId,
           name: 'Withings Activity',
           calories_burned: Math.round(data.calories),
-          created_at: date + 'T00:00:00',
+          created_at: timestamp,
           source: 'withings',
           external_id: `with_a_${date}`
         }, { onConflict: 'external_id' })
@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
         const { error } = await supabase.from('steps').upsert({
           user_id: userId,
           count: data.steps,
-          created_at: date + 'T00:00:00',
+          created_at: timestamp,
           source: 'withings',
           external_id: `with_s_${date}`
         }, { onConflict: 'external_id' })
@@ -182,7 +182,11 @@ Deno.serve(async (req) => {
       status: 'success',
       metrics_synced: mAdded,
       activities_synced: aAdded,
-      steps_synced: sAdded
+      steps_synced: sAdded,
+      debug: {
+        activity_count: actData.body?.activities?.length || 0,
+        last_activity: actData.body?.activities?.[actData.body.activities.length - 1]
+      }
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 
   } catch (err) {
