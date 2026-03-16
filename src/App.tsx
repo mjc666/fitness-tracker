@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
 import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
@@ -98,20 +97,8 @@ function AuthForm() {
 }
 
 function App() {
-  const {
-    offlineReady: [offlineReady, _setOfflineReady],
-    needUpdate: [needUpdate, _setNeedUpdate],
-    updateServiceWorker,
-  } = useRegisterSW();
-
   const [session, setSession] = useState<any>(null);
   const [view, setView] = useState<'dashboard' | 'settings'>('dashboard');
-  
-  // Pull to refresh state
-  const [startY, setStartY] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-  const [pullDist, setPullDist] = useState(0);
-
   const [food, setFood] = useState<FoodEntry[]>([]);
   const [exercise, setExercise] = useState<ExerciseEntry[]>([]);
   const [metrics, setMetrics] = useState<MetricsEntry[]>([]);
@@ -164,34 +151,6 @@ function App() {
     if (metricsData) setMetrics(metricsData);
     if (stepsData) setSteps(stepsData);
     if (hrData) setHeartRate(hrData);
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (window.scrollY === 0) {
-      setStartY(e.touches[0].pageY);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (startY === 0) return;
-    const y = e.touches[0].pageY;
-    const dist = y - startY;
-    if (dist > 0 && window.scrollY === 0) {
-      setPullDist(Math.min(dist * 0.5, 80)); // Add some resistance
-      if (dist > 150) {
-        // Optional: show some "release to refresh" state
-      }
-    }
-  };
-
-  const handleTouchEnd = async () => {
-    if (pullDist > 60) {
-      setRefreshing(true);
-      await fetchData();
-      setRefreshing(false);
-    }
-    setStartY(0);
-    setPullDist(0);
   };
 
   const fetchProfile = async () => {
@@ -433,28 +392,7 @@ function App() {
   const latestBMI = getBMI(latestMetrics);
 
   return (
-    <div 
-      className="container"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={{ transform: pullDist > 0 ? `translateY(${pullDist}px)` : 'none', transition: pullDist === 0 ? 'transform 0.3s ease' : 'none' }}
-    >
-      <div className={`pull-refresh-indicator ${refreshing ? 'refreshing' : ''}`} style={{ opacity: pullDist > 20 || refreshing ? 1 : 0 }}>
-        <RefreshCw className={refreshing ? 'spin' : ''} size={24} style={{ transform: !refreshing ? `rotate(${pullDist * 2}deg)` : 'none' }} />
-      </div>
-
-      {(offlineReady || needUpdate) && (
-        <div className="pwa-toast">
-          <div className="pwa-message">
-            {offlineReady ? <span>App ready to work offline</span> : <span>New version available!</span>}
-          </div>
-          {needUpdate && (
-            <button className="pwa-btn" onClick={() => updateServiceWorker(true)}>Update</button>
-          )}
-        </div>
-      )}
-
+    <div className="container">
       <header className="main-header">
         <div className="header-top">
           <h1><Activity className="header-icon" /> Fitness Tracker</h1>
