@@ -122,7 +122,8 @@ function AuthForm() {
 
 function App() {
   const [session, setSession] = useState<any>(null);
-  const [view, setView] = useState<'dashboard' | 'settings' | 'trainer'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'settings'>('dashboard');
+  const [chatTab, setChatTab] = useState<'chat' | 'recommendations'>('chat');
   const [food, setFood] = useState<FoodEntry[]>([]);
   const [exercise, setExercise] = useState<ExerciseEntry[]>([]);
   const [metrics, setMetrics] = useState<MetricsEntry[]>([]);
@@ -137,6 +138,25 @@ function App() {
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [isChatVisible, setIsChatVisible] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const chatSectionRef = useRef<HTMLElement>(null);
+  const toggleBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        isChatVisible &&
+        chatSectionRef.current && 
+        !chatSectionRef.current.contains(event.target as Node) &&
+        toggleBtnRef.current &&
+        !toggleBtnRef.current.contains(event.target as Node)
+      ) {
+        setIsChatVisible(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isChatVisible]);
 
   useEffect(() => {
     if (isChatVisible && chatScrollRef.current) {
@@ -536,12 +556,15 @@ function App() {
                 <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
               </button>
             )}
-            <button className={`icon-btn ${view === 'trainer' ? 'trainer-btn' : ''}`} onClick={() => setView(view === 'trainer' ? 'dashboard' : 'trainer')}>
+            <button className={`icon-btn ${isChatVisible && chatTab === 'recommendations' ? 'trainer-btn' : ''}`} onClick={() => {
+              setIsChatVisible(!isChatVisible || chatTab !== 'recommendations');
+              setChatTab('recommendations');
+            }}>
               <Sparkles size={18} />
               <span>Personal Trainer</span>
             </button>
-            <button className="icon-btn" onClick={() => setView(view === 'dashboard' || view === 'trainer' ? 'settings' : 'dashboard')}>
-              {view === 'dashboard' || view === 'trainer' ? <SettingsIcon size={18} /> : <ChevronLeft size={18} />}
+            <button className="icon-btn" onClick={() => setView(view === 'dashboard' ? 'settings' : 'dashboard')}>
+              {view === 'dashboard' ? <SettingsIcon size={18} /> : <ChevronLeft size={18} />}
               <span>{view === 'settings' ? 'Dashboard' : 'Settings'}</span>
             </button>
             <button className="icon-btn logout-btn" onClick={() => supabase.auth.signOut()}>
@@ -785,67 +808,6 @@ function App() {
               </div>
             </section>
           </>
-        ) : view === 'trainer' ? (
-          <div className="trainer-view">
-            <header className="trainer-hero">
-              <h2><Sparkles size={32} /> Your Personal AI Trainer</h2>
-              <p>Get personalized exercise, nutrition, and supplement advice based on your recent activity and health metrics.</p>
-              <button 
-                className="generate-btn" 
-                onClick={generateRecommendations} 
-                disabled={isGeneratingRecommendations}
-              >
-                {isGeneratingRecommendations ? (
-                  <><RefreshCw className="spin" size={20} /> Analyzing your data...</>
-                ) : (
-                  <><Sparkles size={20} /> {recommendations ? 'Refresh Recommendations' : 'Get My Recommendations'}</>
-                )}
-              </button>
-            </header>
-
-            {recommendations && (
-              <div className="recommendations-grid">
-                <div className="card rec-card rec-exercises">
-                  <div className="icon-wrapper">
-                    <Dumbbell size={24} />
-                  </div>
-                  <h3>Exercises</h3>
-                  <p className="rec-content">{recommendations.exercises}</p>
-                </div>
-
-                <div className="card rec-card rec-nutrition">
-                  <div className="icon-wrapper">
-                    <Apple size={24} />
-                  </div>
-                  <h3>Nutrition</h3>
-                  <p className="rec-content">{recommendations.nutrition}</p>
-                </div>
-
-                <div className="card rec-card rec-supplements">
-                  <div className="icon-wrapper">
-                    <Pill size={24} />
-                  </div>
-                  <h3>Supplements</h3>
-                  <p className="rec-content">{recommendations.supplements}</p>
-                </div>
-
-                <div className="card rec-card rec-diet">
-                  <div className="icon-wrapper">
-                    <ClipboardList size={24} />
-                  </div>
-                  <h3>Daily Diet Plan</h3>
-                  <p className="rec-content">{recommendations.diet}</p>
-                </div>
-              </div>
-            )}
-            
-            {!recommendations && !isGeneratingRecommendations && (
-              <div className="card" style={{ textAlign: 'center', padding: '3rem', marginBottom: '2rem' }}>
-                <Activity size={48} color="var(--border)" style={{ marginBottom: '1rem' }} />
-                <p style={{ color: 'var(--text-muted)' }}>No recommendations yet. Click the button above to generate your personalized plan!</p>
-              </div>
-            )}
-          </div>
         ) : (
           <div className="settings-view">
             <section className="card">
@@ -971,53 +933,123 @@ function App() {
         )}
       </main>
 
-      {view === 'trainer' && (
+      {session && (
         <>
           <button 
+            ref={toggleBtnRef}
             className={`chat-toggle-btn ${isChatVisible ? 'active' : ''}`}
-            onClick={() => setIsChatVisible(!isChatVisible)}
+            onClick={() => {
+              if (!isChatVisible) setChatTab('chat');
+              setIsChatVisible(!isChatVisible);
+            }}
             title={isChatVisible ? "Close Chat" : "Chat with Trainer"}
           >
             {isChatVisible ? <X size={24} /> : <MessageSquare size={24} />}
           </button>
 
           {isChatVisible && (
-            <section className="chat-section">
-              <div className="chat-header" onClick={() => setIsChatVisible(false)}>
+            <section className="chat-section" ref={chatSectionRef}>
+              <div className="chat-header">
                 <div className="chat-header-left">
                   <Sparkles size={20} color="var(--primary)" />
-                  <h3>Trainer Chat</h3>
+                  <h3>Personal Trainer</h3>
                 </div>
-                <X size={20} color="var(--text-muted)" />
-              </div>
-              <div className="chat-history" ref={chatScrollRef}>
-                {chatMessages.length === 0 && (
-                  <p className="empty-msg" style={{ marginTop: '2rem' }}>
-                    Ask me anything! For example: "How can I improve my cardio?" or "What should I eat after my workout?"
-                  </p>
-                )}
-                {chatMessages.map(msg => (
-                  <div key={msg.id} className={`chat-message ${msg.is_ai ? 'ai' : 'user'}`}>
-                    {msg.message}
-                  </div>
-                ))}
-                {isSendingChat && (
-                  <div className="typing-indicator">Trainer is thinking...</div>
-                )}
-              </div>
-              <form onSubmit={sendChatMessage} className="chat-input-area">
-                <input 
-                  type="text" 
-                  placeholder="Ask your trainer..." 
-                  value={currentChatMessage}
-                  onChange={e => setCurrentChatMessage(e.target.value)}
-                  disabled={isSendingChat}
-                  autoFocus
-                />
-                <button type="submit" className="send-btn" disabled={!currentChatMessage.trim() || isSendingChat}>
-                  <Send size={20} />
+                <button className="chat-close-icon" onClick={() => setIsChatVisible(false)}>
+                  <X size={20} />
                 </button>
-              </form>
+              </div>
+
+              <div className="chat-tabs">
+                <button 
+                  className={chatTab === 'chat' ? 'active' : ''} 
+                  onClick={() => setChatTab('chat')}
+                >
+                  <MessageSquare size={16} /> Chat
+                </button>
+                <button 
+                  className={chatTab === 'recommendations' ? 'active' : ''} 
+                  onClick={() => setChatTab('recommendations')}
+                >
+                  <Sparkles size={16} /> Advice
+                </button>
+              </div>
+
+              <div className="chat-body">
+                {chatTab === 'chat' ? (
+                  <>
+                    <div className="chat-history" ref={chatScrollRef}>
+                      {chatMessages.length === 0 && (
+                        <p className="empty-msg" style={{ marginTop: '2rem' }}>
+                          Ask me anything! For example: "How can I improve my cardio?" or "What should I eat after my workout?"
+                        </p>
+                      )}
+                      {chatMessages.map(msg => (
+                        <div key={msg.id} className={`chat-message ${msg.is_ai ? 'ai' : 'user'}`}>
+                          {msg.message}
+                        </div>
+                      ))}
+                      {isSendingChat && (
+                        <div className="typing-indicator">Trainer is thinking...</div>
+                      )}
+                    </div>
+                    <form onSubmit={sendChatMessage} className="chat-input-area">
+                      <input 
+                        type="text" 
+                        placeholder="Ask your trainer..." 
+                        value={currentChatMessage}
+                        onChange={e => setCurrentChatMessage(e.target.value)}
+                        disabled={isSendingChat}
+                        autoFocus
+                      />
+                      <button type="submit" className="send-btn" disabled={!currentChatMessage.trim() || isSendingChat}>
+                        <Send size={20} />
+                      </button>
+                    </form>
+                  </>
+                ) : (
+                  <div className="chat-recommendations">
+                    <button 
+                      className="generate-btn mini" 
+                      onClick={generateRecommendations} 
+                      disabled={isGeneratingRecommendations}
+                    >
+                      {isGeneratingRecommendations ? (
+                        <><RefreshCw className="spin" size={16} /> Thinking...</>
+                      ) : (
+                        <><Sparkles size={16} /> {recommendations ? 'Refresh Advice' : 'Get My Advice'}</>
+                      )}
+                    </button>
+
+                    {recommendations && (
+                      <div className="recommendations-list">
+                        <div className="rec-item">
+                          <h4><Dumbbell size={18} /> Exercises</h4>
+                          <p>{recommendations.exercises}</p>
+                        </div>
+                        <div className="rec-item">
+                          <h4><Apple size={18} /> Nutrition</h4>
+                          <p>{recommendations.nutrition}</p>
+                        </div>
+                        <div className="rec-item">
+                          <h4><Pill size={18} /> Supplements</h4>
+                          <p>{recommendations.supplements}</p>
+                        </div>
+                        <div className="rec-item">
+                          <h4><ClipboardList size={18} /> Diet Plan</h4>
+                          <p>{recommendations.diet}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {!recommendations && !isGeneratingRecommendations && (
+                      <div style={{ textAlign: 'center', padding: '2rem' }}>
+                        <Activity size={32} color="var(--border)" style={{ marginBottom: '1rem' }} />
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No advice yet. Let me analyze your data!</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </section>
           )}
         </>
