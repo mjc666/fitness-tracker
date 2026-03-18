@@ -147,8 +147,7 @@ function App() {
         isChatVisible &&
         chatSectionRef.current && 
         !chatSectionRef.current.contains(event.target as Node) &&
-        toggleBtnRef.current &&
-        !toggleBtnRef.current.contains(event.target as Node)
+        (!toggleBtnRef.current || !toggleBtnRef.current.contains(event.target as Node))
       ) {
         setIsChatVisible(false);
       }
