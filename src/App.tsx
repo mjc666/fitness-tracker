@@ -564,8 +564,12 @@ function App() {
               </button>
             )}
             <button className={`icon-btn ${isChatVisible && chatTab === 'recommendations' ? 'trainer-btn' : ''}`} onClick={() => {
-              setIsChatVisible(!isChatVisible || chatTab !== 'recommendations');
-              setChatTab('recommendations');
+              if (isChatVisible && chatTab === 'recommendations') {
+                setIsChatVisible(false);
+              } else {
+                setIsChatVisible(true);
+                setChatTab('recommendations');
+              }
             }}>
               <Sparkles size={18} />
               <span>Personal Trainer</span>
