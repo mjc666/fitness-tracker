@@ -139,10 +139,15 @@ function App() {
   const chatScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    if (isChatVisible && chatScrollRef.current) {
+      const timer = setTimeout(() => {
+        if (chatScrollRef.current) {
+          chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [chatMessages]);
+  }, [chatMessages, isChatVisible]);
 
   const [foodName, setFoodName] = useState('');
   const [foodCals, setFoodCals] = useState('');

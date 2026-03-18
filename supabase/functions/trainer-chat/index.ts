@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
       supabase.from('exercise').select('*').eq('user_id', userId).gte('created_at', sevenDaysAgoStr),
       supabase.from('steps').select('*').eq('user_id', userId).gte('created_at', sevenDaysAgoStr),
       supabase.from('heart_rate').select('*').eq('user_id', userId).gte('created_at', sevenDaysAgoStr),
-      supabase.from('trainer_chat').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(10)
+      supabase.from('trainer_chat').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(30)
     ]);
 
     const userSummary = {
@@ -76,24 +76,36 @@ Deno.serve(async (req) => {
     })) || [];
 
     // 3. Prompt Gemini
-    const systemInstruction = `
-      You are an expert AI Personal Trainer. Use the user's health data and recent activity for context. 
-      Be supportive, direct, and evidence-based. If asked about exercises, nutrition, or health metrics, 
-      refer to the data provided. 
-      User Data: ${JSON.stringify(userSummary)}
-    `;
+    const systemPrompt = `You are a world-class AI Personal Trainer and Health Coach. 
+Your goal is to provide deep, actionable, and science-based advice.
 
+USER HEALTH DATA:
+${JSON.stringify(userSummary, null, 2)}
+
+CORE DIRECTIVE:
+When the user asks a question, PROVIDE A COMPLETE AND DETAILED ANSWER. 
+Do not just acknowledge the question. Explain the "why" and "how".
+For example, if asked about alcohol, explain its caloric density (7kcal/g), how it pauses fat oxidation (lipolysis), and how it affects sleep/recovery.
+
+RESPONSE GUIDELINES:
+- Give at least 3-4 paragraphs of detailed information when asked about complex topics.
+- Use the user's data to make it relevant.
+- Use formatting (bolding, bullets) to make it readable.
+- If the user hasn't logged any alcohol, explain the general science first, then ask them if they'd like to start tracking it.
+- DO NOT TRUNCATE. Provide the full scientific explanation requested.`;
     const geminiResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [
-          { role: "user", parts: [{ text: systemInstruction }] },
+          { role: "user", parts: [{ text: systemPrompt }] },
+          { role: "model", parts: [{ text: "Understood. I am your expert AI Health Coach. I will provide detailed, science-based, and data-driven responses to help you optimize your health. I'm ready for your questions." }] },
           ...history,
           { role: "user", parts: [{ text: message }] }
         ],
         generationConfig: {
-          maxOutputTokens: 500,
+          maxOutputTokens: 4096,
+          temperature: 0.7,
         }
       })
     })

@@ -589,9 +589,9 @@ button:hover {
   position: fixed;
   bottom: 2rem;
   right: 2rem;
-  width: 400px;
+  width: 500px;
   max-width: calc(100vw - 4rem);
-  max-height: 600px;
+  max-height: 700px;
   display: flex;
   flex-direction: column;
   background: white;
