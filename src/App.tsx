@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap, Dumbbell, Apple, Pill, ClipboardList, MessageSquare, Send, X } from 'lucide-react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap, Dumbbell, Apple, Pill, ClipboardList, MessageSquare, Send, X, Target, Calculator } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -542,6 +542,14 @@ function App() {
 
   const latestBMI = getBMI(latestMetrics);
   const bmr = calculateBMR(latestMetrics?.weight, profile.height, profile.birthday || '', profile.gender);
+  
+  const weightToGoal = profile.goal_weight && latestMetrics?.weight 
+    ? Math.abs(latestMetrics.weight - profile.goal_weight) 
+    : null;
+    
+  const calorieBudget = bmr 
+    ? (bmr + totalBurnedToday) - totalEatenToday 
+    : null;
 
   return (
     <div className="container">
@@ -648,6 +656,24 @@ function App() {
                   <h3>Heart Rate</h3>
                   <p className="stat-value">{todayHRRecord ? todayHRRecord.bpm : (latestHR ? latestHR.bpm : '--')}</p>
                   <p className="stat-label">avg bpm</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
+                <Target className="icon target-icon" />
+                <div className="stat-content">
+                  <h3>Weight to Goal</h3>
+                  <p className="stat-value">{weightToGoal !== null ? displayWeight(weightToGoal) : '--'}</p>
+                  <p className="stat-label">{weightUnit} remaining</p>
+                </div>
+              </div>
+
+              <div className="card stat-card">
+                <Calculator className="icon calc-icon" />
+                <div className="stat-content">
+                  <h3>Calorie Budget</h3>
+                  <p className={`stat-value ${calorieBudget && calorieBudget < 0 ? 'text-danger' : 'text-primary'}`}>{calorieBudget !== null ? Math.round(calorieBudget) : '--'}</p>
+                  <p className="stat-label">kcal remaining</p>
                 </div>
               </div>
             </div>

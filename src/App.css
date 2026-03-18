@@ -150,6 +150,8 @@ body {
 .net-icon { color: #8b5cf6; background: #f5f3ff; }
 .steps-icon { color: #10b981; background: #ecfdf5; }
 .hr-icon { color: #ec4899; background: #fdf2f8; }
+.target-icon { color: #f97316; background: #fff7ed; }
+.calc-icon { color: #06b6d4; background: #ecfeff; }
 
 .stat-content h3 {
   font-size: 0.875rem;
@@ -162,6 +164,9 @@ body {
   font-weight: 700;
   margin: 0.25rem 0;
 }
+
+.stat-value.text-danger { color: var(--danger); }
+.stat-value.text-primary { color: var(--primary-dark); }
 
 .stat-label {
   font-size: 0.75rem;
