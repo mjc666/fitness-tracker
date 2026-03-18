@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap, Dumbbell, Apple, Pill, ClipboardList, MessageSquare, Send, X } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -122,7 +122,7 @@ function AuthForm() {
 
 function App() {
   const [session, setSession] = useState<any>(null);
-  const [view, setView] = useState<'dashboard' | 'settings'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'settings' | 'trainer'>('dashboard');
   const [food, setFood] = useState<FoodEntry[]>([]);
   const [exercise, setExercise] = useState<ExerciseEntry[]>([]);
   const [metrics, setMetrics] = useState<MetricsEntry[]>([]);
@@ -130,6 +130,20 @@ function App() {
   const [heartRate, setHeartRate] = useState<HeartRateEntry[]>([]);
   const [profile, setProfile] = useState<Profile>({ full_name: '', height: 0, goal_weight: 0, units: 'metric', birthday: '', gender: undefined });
   
+  const [recommendations, setRecommendations] = useState<{ exercises: string, nutrition: string, supplements: string, diet: string } | null>(null);
+  const [isGeneratingRecommendations, setIsGeneratingRecommendations] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ id: string, message: string, is_ai: boolean, created_at: string }[]>([]);
+  const [currentChatMessage, setCurrentChatMessage] = useState('');
+  const [isSendingChat, setIsSendingChat] = useState(false);
+  const [isChatVisible, setIsChatVisible] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
+
   const [foodName, setFoodName] = useState('');
   const [foodCals, setFoodCals] = useState('');
   const [foodCarbs, setFoodCarbs] = useState('');
@@ -160,6 +174,8 @@ function App() {
     if (session) {
       fetchData();
       fetchProfile();
+      fetchRecommendations();
+      fetchChatHistory();
     }
   }, [session]);
 
@@ -193,6 +209,59 @@ function App() {
       const newProfile = { id: session.user.id, full_name: '', height: 0, goal_weight: 0, units: 'metric' as const, birthday: '', gender: undefined };
       await supabase.from('profiles').upsert(newProfile);
       setProfile(newProfile);
+    }
+  };
+
+  const fetchRecommendations = async () => {
+    const { data, error } = await supabase.from('trainer_recommendations').select('*').maybeSingle();
+    if (data && !error) {
+      setRecommendations(data);
+    }
+  };
+
+  const fetchChatHistory = async () => {
+    const { data, error } = await supabase.from('trainer_chat').select('*').order('created_at', { ascending: true });
+    if (data && !error) {
+      setChatMessages(data);
+    }
+  };
+
+  const sendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentChatMessage.trim() || isSendingChat) return;
+
+    const userMsg = currentChatMessage;
+    setCurrentChatMessage('');
+    setIsSendingChat(true);
+
+    // Optimistically add user message
+    const tempId = Math.random().toString();
+    setChatMessages(prev => [...prev, { id: tempId, message: userMsg, is_ai: false, created_at: new Date().toISOString() }]);
+
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      const response = await fetch(`${supabaseUrl}/functions/v1/trainer-chat`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${currentSession?.access_token}`,
+          'apikey': supabaseAnonKey
+        },
+        body: JSON.stringify({ message: userMsg })
+      });
+      const data = await response.json();
+      if (data.message) {
+        setChatMessages(prev => [...prev.filter(m => m.id !== tempId), { id: Math.random().toString(), message: userMsg, is_ai: false, created_at: new Date().toISOString() }, { id: Math.random().toString(), message: data.message, is_ai: true, created_at: new Date().toISOString() }]);
+        // Refetch to get actual IDs and timestamps from DB
+        fetchChatHistory();
+      } else {
+        alert('Failed to send message: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Chat failed', err);
+      alert('Failed to connect to the Personal Trainer chat.');
+    } finally {
+      setIsSendingChat(false);
     }
   };
 
@@ -310,9 +379,43 @@ function App() {
         }
       }
     } catch (err) {
+      console.error('Sync failed', err);
       alert('Sync failed. Please check your internet connection and try again.');
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const generateRecommendations = async () => {
+    setIsGeneratingRecommendations(true);
+    try {
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (!currentSession) {
+        alert('Your session has expired. Please log in again.');
+        return;
+      }
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/personal-trainer`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${currentSession.access_token}`,
+          'apikey': supabaseAnonKey
+        }
+      });
+      
+      const data = await response.json();
+      if (data.exercises) {
+        setRecommendations(data);
+      } else {
+        console.error('Trainer error:', data);
+        alert('Failed to generate recommendations: ' + (data.error || data.message || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Generation failed', err);
+      alert('Failed to connect to the Personal Trainer. Please try again later.');
+    } finally {
+      setIsGeneratingRecommendations(false);
     }
   };
 
@@ -428,9 +531,13 @@ function App() {
                 <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
               </button>
             )}
-            <button className="icon-btn" onClick={() => setView(view === 'dashboard' ? 'settings' : 'dashboard')}>
-              {view === 'dashboard' ? <SettingsIcon size={18} /> : <ChevronLeft size={18} />}
-              <span>{view === 'dashboard' ? 'Settings' : 'Dashboard'}</span>
+            <button className={`icon-btn ${view === 'trainer' ? 'trainer-btn' : ''}`} onClick={() => setView(view === 'trainer' ? 'dashboard' : 'trainer')}>
+              <Sparkles size={18} />
+              <span>Personal Trainer</span>
+            </button>
+            <button className="icon-btn" onClick={() => setView(view === 'dashboard' || view === 'trainer' ? 'settings' : 'dashboard')}>
+              {view === 'dashboard' || view === 'trainer' ? <SettingsIcon size={18} /> : <ChevronLeft size={18} />}
+              <span>{view === 'settings' ? 'Dashboard' : 'Settings'}</span>
             </button>
             <button className="icon-btn logout-btn" onClick={() => supabase.auth.signOut()}>
               <LogOut size={18} />
@@ -673,6 +780,67 @@ function App() {
               </div>
             </section>
           </>
+        ) : view === 'trainer' ? (
+          <div className="trainer-view">
+            <header className="trainer-hero">
+              <h2><Sparkles size={32} /> Your Personal AI Trainer</h2>
+              <p>Get personalized exercise, nutrition, and supplement advice based on your recent activity and health metrics.</p>
+              <button 
+                className="generate-btn" 
+                onClick={generateRecommendations} 
+                disabled={isGeneratingRecommendations}
+              >
+                {isGeneratingRecommendations ? (
+                  <><RefreshCw className="spin" size={20} /> Analyzing your data...</>
+                ) : (
+                  <><Sparkles size={20} /> {recommendations ? 'Refresh Recommendations' : 'Get My Recommendations'}</>
+                )}
+              </button>
+            </header>
+
+            {recommendations && (
+              <div className="recommendations-grid">
+                <div className="card rec-card rec-exercises">
+                  <div className="icon-wrapper">
+                    <Dumbbell size={24} />
+                  </div>
+                  <h3>Exercises</h3>
+                  <p className="rec-content">{recommendations.exercises}</p>
+                </div>
+
+                <div className="card rec-card rec-nutrition">
+                  <div className="icon-wrapper">
+                    <Apple size={24} />
+                  </div>
+                  <h3>Nutrition</h3>
+                  <p className="rec-content">{recommendations.nutrition}</p>
+                </div>
+
+                <div className="card rec-card rec-supplements">
+                  <div className="icon-wrapper">
+                    <Pill size={24} />
+                  </div>
+                  <h3>Supplements</h3>
+                  <p className="rec-content">{recommendations.supplements}</p>
+                </div>
+
+                <div className="card rec-card rec-diet">
+                  <div className="icon-wrapper">
+                    <ClipboardList size={24} />
+                  </div>
+                  <h3>Daily Diet Plan</h3>
+                  <p className="rec-content">{recommendations.diet}</p>
+                </div>
+              </div>
+            )}
+            
+            {!recommendations && !isGeneratingRecommendations && (
+              <div className="card" style={{ textAlign: 'center', padding: '3rem', marginBottom: '2rem' }}>
+                <Activity size={48} color="var(--border)" style={{ marginBottom: '1rem' }} />
+                <p style={{ color: 'var(--text-muted)' }}>No recommendations yet. Click the button above to generate your personalized plan!</p>
+              </div>
+            )}
+          </div>
         ) : (
           <div className="settings-view">
             <section className="card">
@@ -797,6 +965,58 @@ function App() {
           </div>
         )}
       </main>
+
+      {view === 'trainer' && (
+        <>
+          <button 
+            className={`chat-toggle-btn ${isChatVisible ? 'active' : ''}`}
+            onClick={() => setIsChatVisible(!isChatVisible)}
+            title={isChatVisible ? "Close Chat" : "Chat with Trainer"}
+          >
+            {isChatVisible ? <X size={24} /> : <MessageSquare size={24} />}
+          </button>
+
+          {isChatVisible && (
+            <section className="chat-section">
+              <div className="chat-header" onClick={() => setIsChatVisible(false)}>
+                <div className="chat-header-left">
+                  <Sparkles size={20} color="var(--primary)" />
+                  <h3>Trainer Chat</h3>
+                </div>
+                <X size={20} color="var(--text-muted)" />
+              </div>
+              <div className="chat-history" ref={chatScrollRef}>
+                {chatMessages.length === 0 && (
+                  <p className="empty-msg" style={{ marginTop: '2rem' }}>
+                    Ask me anything! For example: "How can I improve my cardio?" or "What should I eat after my workout?"
+                  </p>
+                )}
+                {chatMessages.map(msg => (
+                  <div key={msg.id} className={`chat-message ${msg.is_ai ? 'ai' : 'user'}`}>
+                    {msg.message}
+                  </div>
+                ))}
+                {isSendingChat && (
+                  <div className="typing-indicator">Trainer is thinking...</div>
+                )}
+              </div>
+              <form onSubmit={sendChatMessage} className="chat-input-area">
+                <input 
+                  type="text" 
+                  placeholder="Ask your trainer..." 
+                  value={currentChatMessage}
+                  onChange={e => setCurrentChatMessage(e.target.value)}
+                  disabled={isSendingChat}
+                  autoFocus
+                />
+                <button type="submit" className="send-btn" disabled={!currentChatMessage.trim() || isSendingChat}>
+                  <Send size={20} />
+                </button>
+              </form>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }
