@@ -158,7 +158,7 @@ function App() {
   }, [isChatVisible]);
 
   useEffect(() => {
-    if (isChatVisible && chatScrollRef.current) {
+    if (isChatVisible && chatTab === 'chat' && chatScrollRef.current) {
       const timer = setTimeout(() => {
         if (chatScrollRef.current) {
           chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
@@ -166,7 +166,7 @@ function App() {
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [chatMessages, isChatVisible]);
+  }, [chatMessages, isChatVisible, chatTab]);
 
   const [foodName, setFoodName] = useState('');
   const [foodCals, setFoodCals] = useState('');
