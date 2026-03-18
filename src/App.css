@@ -10,11 +10,22 @@
   --border: #e2e8f0;
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: var(--bg);
   color: var(--text-main);
+  overflow-x: hidden;
+  width: 100%;
+}
+
+#root {
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .auth-container {
@@ -117,8 +128,8 @@ body {
 
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
   margin-bottom: 2rem;
 }
 
@@ -180,7 +191,7 @@ body {
 
 .charts-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr));
   gap: 2rem;
 }
 
@@ -193,7 +204,7 @@ body {
 
 .forms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 2rem;
   margin-bottom: 3rem;
 }
