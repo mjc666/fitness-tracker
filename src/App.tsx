@@ -935,17 +935,19 @@ function App() {
 
       {session && (
         <>
-          <button 
-            ref={toggleBtnRef}
-            className={`chat-toggle-btn ${isChatVisible ? 'active' : ''}`}
-            onClick={() => {
-              if (!isChatVisible) setChatTab('chat');
-              setIsChatVisible(!isChatVisible);
-            }}
-            title={isChatVisible ? "Close Chat" : "Chat with Trainer"}
-          >
-            {isChatVisible ? <X size={24} /> : <MessageSquare size={24} />}
-          </button>
+          {!isChatVisible && (
+            <button 
+              ref={toggleBtnRef}
+              className="chat-toggle-btn"
+              onClick={() => {
+                setChatTab('chat');
+                setIsChatVisible(true);
+              }}
+              title="Chat with Trainer"
+            >
+              <MessageSquare size={24} />
+            </button>
+          )}
 
           {isChatVisible && (
             <section className="chat-section" ref={chatSectionRef}>
