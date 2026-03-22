@@ -244,8 +244,8 @@ function App() {
   };
 
   const fetchChatHistory = async () => {
-    const { data, error } = await supabase.from('trainer_chat').select('*').order('created_at', { ascending: true });
-    if (data && !error) {
+    const { data, error } = await supabase.from('trainer_chat').select('*').order('created_at', { ascending: true }).order('is_ai', { ascending: true });
+    if (!error && data) {
       setChatMessages(data);
     }
   };

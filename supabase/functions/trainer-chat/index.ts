@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
       supabase.from('exercise').select('*').eq('user_id', userId).gte('created_at', sevenDaysAgoStr),
       supabase.from('steps').select('*').eq('user_id', userId).gte('created_at', sevenDaysAgoStr),
       supabase.from('heart_rate').select('*').eq('user_id', userId).gte('created_at', sevenDaysAgoStr),
-      supabase.from('trainer_chat').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(30)
+      supabase.from('trainer_chat').select('*').eq('user_id', userId).order('created_at', { ascending: false }).order('is_ai', { ascending: false }).limit(30)
     ]);
 
     const userSummary = {
@@ -117,11 +117,9 @@ RESPONSE GUIDELINES:
 
     const aiMessage = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't generate a response."
 
-    // 4. Save Chat History
-    await Promise.all([
-      supabase.from('trainer_chat').insert({ user_id: userId, message, is_ai: false }),
-      supabase.from('trainer_chat').insert({ user_id: userId, message: aiMessage, is_ai: true })
-    ]);
+    // 4. Save Chat History sequentially to ensure distinct timestamps or at least correct order
+    await supabase.from('trainer_chat').insert({ user_id: userId, message, is_ai: false });
+    await supabase.from('trainer_chat').insert({ user_id: userId, message: aiMessage, is_ai: true });
 
     return new Response(JSON.stringify({ message: aiMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
