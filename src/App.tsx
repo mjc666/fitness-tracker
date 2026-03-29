@@ -699,7 +699,7 @@ function App() {
                   <button type="submit"><Plus size={18} /> Add Entry</button>
                 </form>
                 <div className="log-list">
-                  {todayFood.slice(0, 5).map(f => (
+                  {todayFood.map(f => (
                     <div key={f.id} className="log-item">
                       <div className="log-info">
                         <span>{f.name}</span>
@@ -725,7 +725,7 @@ function App() {
                   <button type="submit"><Plus size={18} /> Add Entry</button>
                 </form>
                 <div className="log-list">
-                  {todayExercise.slice(0, 5).map(ex => (
+                  {todayExercise.map(ex => (
                     <div key={ex.id} className="log-item">
                       <span>{ex.name}</span>
                       <span className="log-value-negative">-{ex.calories_burned} kcal</span>
