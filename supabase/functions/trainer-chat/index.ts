@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_API_KEY')
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent"
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -79,9 +79,6 @@ Deno.serve(async (req) => {
     const systemPrompt = `You are a world-class AI Personal Trainer and Health Coach. 
 Your goal is to provide deep, actionable, and science-based advice.
 
-USER HEALTH DATA:
-${JSON.stringify(userSummary, null, 2)}
-
 CORE DIRECTIVE:
 When the user asks a question, PROVIDE A COMPLETE AND DETAILED ANSWER. 
 Do not just acknowledge the question. Explain the "why" and "how".
@@ -89,22 +86,30 @@ For example, if asked about alcohol, explain its caloric density (7kcal/g), how 
 
 RESPONSE GUIDELINES:
 - Give at least 3-4 paragraphs of detailed information when asked about complex topics.
-- Use the user's data to make it relevant.
+- Use the provided user health data to make it relevant.
 - Use formatting (bolding, bullets) to make it readable.
 - If the user hasn't logged any alcohol, explain the general science first, then ask them if they'd like to start tracking it.
-- DO NOT TRUNCATE. Provide the full scientific explanation requested.`;
-    const geminiResponse = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+- DO NOT TRUNCATE. Provide the full scientific explanation requested.
+- Always be supportive, encouraging, and science-grounded.`;
+
+    const modelId = "gemini-3.1-pro-preview"; // Reverting to 3.1 Preview as requested
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
+
+    const geminiResponse = await fetch(`${geminiUrl}?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: systemPrompt }]
+        },
         contents: [
-          { role: "user", parts: [{ text: systemPrompt }] },
-          { role: "model", parts: [{ text: "Understood. I am your expert AI Health Coach. I will provide detailed, science-based, and data-driven responses to help you optimize your health. I'm ready for your questions." }] },
+          { role: "user", parts: [{ text: `CONTEXT - USER HEALTH DATA (last 7 days):\n${JSON.stringify(userSummary, null, 2)}` }] },
+          { role: "model", parts: [{ text: "Understood. I have analyzed your health data and I am ready to provide detailed, science-based coaching. What's on your mind?" }] },
           ...history,
           { role: "user", parts: [{ text: message }] }
         ],
         generationConfig: {
-          maxOutputTokens: 4096,
+          maxOutputTokens: 8192,
           temperature: 0.7,
         }
       })
@@ -115,7 +120,26 @@ RESPONSE GUIDELINES:
       throw new Error(geminiData.error.message)
     }
 
-    const aiMessage = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't generate a response."
+    const candidate = geminiData.candidates?.[0];
+    if (!candidate) {
+      throw new Error("No candidates returned from Gemini");
+    }
+
+    // Merge all parts in case the response is split
+    let aiMessage = candidate.content?.parts?.map((p: any) => p.text).join('') || "";
+    
+    if (!aiMessage) {
+      if (candidate.finishReason === "SAFETY") {
+        aiMessage = "I'm sorry, I can't provide a response to that due to safety guidelines. Let's talk about your fitness goals instead!";
+      } else {
+        aiMessage = "I'm sorry, I couldn't generate a response. Let's try another question!";
+      }
+    }
+
+    // If it was truncated by the model, append a note
+    if (candidate.finishReason === "MAX_TOKENS") {
+      aiMessage += "\n\n(Note: The response was too long and had to be truncated.)";
+    }
 
     // 4. Save Chat History sequentially to ensure distinct timestamps or at least correct order
     await supabase.from('trainer_chat').insert({ user_id: userId, message, is_ai: false });

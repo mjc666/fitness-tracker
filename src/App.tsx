@@ -1,14 +1,25 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, memo } from 'react';
 import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap, Dumbbell, Apple, Pill, ClipboardList, MessageSquare, Send, X, Target, Calculator } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
 } from 'recharts';
+import ReactMarkdown from 'react-markdown';
 import './App.css';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+const ChatMessage = memo(({ msg }: { msg: { id: string, message: string, is_ai: boolean } }) => (
+  <div key={msg.id} className={`chat-message ${msg.is_ai ? 'ai' : 'user'}`}>
+    {msg.is_ai ? (
+      <ReactMarkdown>{msg.message}</ReactMarkdown>
+    ) : (
+      msg.message
+    )}
+  </div>
+));
 
 interface FoodEntry {
   id: number;
@@ -1015,9 +1026,7 @@ function App() {
                         </p>
                       )}
                       {chatMessages.map(msg => (
-                        <div key={msg.id} className={`chat-message ${msg.is_ai ? 'ai' : 'user'}`}>
-                          {msg.message}
-                        </div>
+                        <ChatMessage key={msg.id} msg={msg} />
                       ))}
                       {isSendingChat && (
                         <div className="typing-indicator">Trainer is thinking...</div>

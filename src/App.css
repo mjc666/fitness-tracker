@@ -744,7 +744,36 @@ button:hover {
   background: #f1f5f9;
   color: var(--text-main);
   border-bottom-left-radius: 0.25rem;
-  white-space: pre-wrap;
+}
+
+.chat-message.ai p {
+  margin: 0.5rem 0;
+}
+
+.chat-message.ai p:first-child {
+  margin-top: 0;
+}
+
+.chat-message.ai p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message.ai ul, .chat-message.ai ol {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.chat-message.ai li {
+  margin: 0.25rem 0;
+}
+
+.chat-message.ai h1, .chat-message.ai h2, .chat-message.ai h3, .chat-message.ai h4 {
+  margin: 1rem 0 0.5rem 0;
+  font-size: 1rem;
+}
+
+.chat-message.ai h3 {
+  font-size: 1.1rem;
 }
 
 .chat-input-area {

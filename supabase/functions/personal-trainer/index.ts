@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const GEMINI_API_KEY = Deno.env.get('GOOGLE_AI_API_KEY')
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent"
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
         }],
         generationConfig: {
           responseMimeType: "application/json",
+          maxOutputTokens: 2048,
           responseSchema: {
             type: "object",
             properties: {
@@ -127,7 +128,8 @@ Deno.serve(async (req) => {
       })
     }
 
-    const textResult = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || "{}"
+    const candidate = geminiData.candidates?.[0];
+    const textResult = candidate?.content?.parts?.map((p: any) => p.text).join('') || "{}";
     const result = JSON.parse(textResult);
 
     // Save to database
