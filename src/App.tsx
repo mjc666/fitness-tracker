@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo, useRef, memo } from 'react';
-import { Plus, Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap, Dumbbell, Apple, Pill, ClipboardList, MessageSquare, Send, X, Target, Calculator } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, memo, useCallback } from 'react';
+import { AddFoodForm } from './components/AddFoodForm';
+import { AddExerciseForm } from './components/AddExerciseForm';
+import { Flame, Utensils, Scale, Activity, TrendingUp, Settings as SettingsIcon, LogOut, ChevronLeft, Save, User as UserIcon, RefreshCw, Sparkles, Wheat, Footprints, Heart, Zap, Dumbbell, Apple, Pill, ClipboardList, MessageSquare, Send, X, Target, Calculator } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, AreaChart, Area
@@ -179,17 +181,11 @@ function App() {
     }
   }, [chatMessages, isChatVisible, chatTab]);
 
-  const [foodName, setFoodName] = useState('');
-  const [foodCals, setFoodCals] = useState('');
-  const [foodCarbs, setFoodCarbs] = useState('');
-  const [exerciseName, setExerciseName] = useState('');
-  const [exerciseCals, setExerciseCals] = useState('');
   const [weightInput, setWeightInput] = useState('');
   const [heightInput, setHeightInput] = useState('');
   const [goalWeightInput, setGoalWeightInput] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isEstimating, setIsEstimating] = useState(false);
-  const [isEstimatingExercise, setIsEstimatingExercise] = useState(false);
+
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -215,11 +211,11 @@ function App() {
   }, [session]);
 
   const fetchData = async () => {
-    const { data: foodData } = await supabase.from('food').select('*').order('created_at', { ascending: false });
-    const { data: exerciseData } = await supabase.from('exercise').select('*').order('created_at', { ascending: false });
-    const { data: metricsData } = await supabase.from('metrics').select('*').order('created_at', { ascending: false });
-    const { data: stepsData } = await supabase.from('steps').select('*').order('created_at', { ascending: false });
-    const { data: hrData } = await supabase.from('heart_rate').select('*').order('created_at', { ascending: false });
+    const { data: foodData } = await supabase.from('food').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data: exerciseData } = await supabase.from('exercise').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data: metricsData } = await supabase.from('metrics').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data: stepsData } = await supabase.from('steps').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data: hrData } = await supabase.from('heart_rate').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
 
     if (foodData) setFood(foodData);
     if (exerciseData) setExercise(exerciseData);
@@ -300,23 +296,32 @@ function App() {
     }
   };
 
-  const addFood = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!foodName || !foodCals) return;
-    await supabase.from('food').insert([{ 
-      name: foodName, 
-      calories: parseInt(foodCals),
-      carbs: parseInt(foodCarbs || '0')
-    }]);
-    setFoodName('');
-    setFoodCals('');
-    setFoodCarbs('');
-    fetchData();
-  };
+  const foodSuggestions = useMemo(() => {
+    const suggestions: Record<string, { calories: number, carbs: number }> = {};
+    food.forEach(f => {
+      if (!suggestions[f.name]) {
+        suggestions[f.name] = { calories: f.calories, carbs: f.carbs };
+      }
+    });
+    return suggestions;
+  }, [food]);
 
-  const estimateCalories = async () => {
-    if (!foodName) return;
-    setIsEstimating(true);
+  const addFood = useCallback(async (name: string, cals: number, carbs: number) => {
+    await supabase.from('food').insert([{ 
+      user_id: session.user.id,
+      name, 
+      calories: cals,
+      carbs: carbs
+    }]);
+    fetchData();
+  }, [fetchData, session]);
+
+  const deleteFood = useCallback(async (id: number) => {
+    await supabase.from('food').delete().eq('id', id).eq('user_id', session.user.id);
+    fetchData();
+  }, [fetchData, session]);
+
+  const estimateCalories = useCallback(async (foodName: string) => {
     try {
       const response = await fetch(`${supabaseUrl}/functions/v1/estimate-calories`, {
         method: 'POST',
@@ -324,18 +329,25 @@ function App() {
         body: JSON.stringify({ foodDescription: foodName })
       });
       const data = await response.json();
-      if (data.calories !== undefined) setFoodCals(data.calories.toString());
-      if (data.carbs !== undefined) setFoodCarbs(data.carbs.toString());
+      return { calories: data.calories, carbs: data.carbs };
     } catch (err) {
       console.error('Estimation failed', err);
-    } finally {
-      setIsEstimating(false);
+      return {};
     }
-  };
+  }, [session, supabaseUrl]);
 
-  const estimateExercise = async () => {
-    if (!exerciseName) return;
-    setIsEstimatingExercise(true);
+// ... (in App component)
+  const addExercise = useCallback(async (name: string, cals: number) => {
+    await supabase.from('exercise').insert([{ user_id: session.user.id, name, calories_burned: cals }]);
+    fetchData();
+  }, [fetchData, session]);
+
+  const deleteExercise = useCallback(async (id: number) => {
+    await supabase.from('exercise').delete().eq('id', id).eq('user_id', session.user.id);
+    fetchData();
+  }, [fetchData, session]);
+
+  const estimateExercise = useCallback(async (exerciseName: string) => {
     try {
       const { data: { session: currentSession } } = await supabase.auth.getSession();
       const response = await fetch(`${supabaseUrl}/functions/v1/estimate-exercise`, {
@@ -344,22 +356,13 @@ function App() {
         body: JSON.stringify({ activityDescription: exerciseName })
       });
       const data = await response.json();
-      if (data.calories !== undefined) setExerciseCals(data.calories.toString());
+      return { calories: data.calories };
     } catch (err) {
       console.error('Estimation failed', err);
-    } finally {
-      setIsEstimatingExercise(false);
+      return {};
     }
-  };
+  }, [supabaseUrl]);
 
-  const addExercise = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!exerciseName || !exerciseCals) return;
-    await supabase.from('exercise').insert([{ name: exerciseName, calories_burned: parseInt(exerciseCals) }]);
-    setExerciseName('');
-    setExerciseCals('');
-    fetchData();
-  };
 
   const addMetrics = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -375,6 +378,7 @@ function App() {
     }
     
     await supabase.from('metrics').insert([{ 
+      user_id: session.user.id,
       weight: wKg, 
       height: hCm, 
       bmi: bmi 
@@ -694,60 +698,21 @@ function App() {
             </div>
 
             <div className="forms-grid">
-              <section className="card">
-                <h2>Add Food</h2>
-                <form onSubmit={addFood}>
-                  <div className="input-with-action">
-                    <input type="text" placeholder="What did you eat?" value={foodName} onChange={e => setFoodName(e.target.value)} />
-                    <button type="button" className="action-btn" onClick={estimateCalories} disabled={!foodName || isEstimating} title="Estimate calories & carbs with AI">
-                      <Sparkles className={isEstimating ? 'pulse' : ''} size={18} />
-                    </button>
-                  </div>
-                  <div className="input-row">
-                    <input type="number" placeholder="Calories" value={foodCals} onChange={e => setFoodCals(e.target.value)} />
-                    <input type="number" placeholder="Carbs (g)" value={foodCarbs} onChange={e => setFoodCarbs(e.target.value)} />
-                  </div>
-                  <button type="submit"><Plus size={18} /> Add Entry</button>
-                </form>
-                <div className="log-list">
-                  {todayFood.map(f => (
-                    <div key={f.id} className="log-item">
-                      <div className="log-info">
-                        <span>{f.name}</span>
-                        {f.carbs > 0 && <span className="log-subvalue">{f.carbs}g carbs</span>}
-                      </div>
-                      <span className="log-value">{f.calories} kcal</span>
-                    </div>
-                  ))}
-                  {todayFood.length === 0 && <p className="empty-msg">No entries for today</p>}
-                </div>
-              </section>
+            <AddFoodForm 
+              foodSuggestions={foodSuggestions} 
+              todayFood={todayFood}
+              onAddFood={addFood}
+              onDeleteFood={deleteFood}
+              estimateCalories={estimateCalories}
+            />
 
-              <section className="card">
-                <h2>Add Exercise</h2>
-                <form onSubmit={addExercise}>
-                  <div className="input-with-action">
-                    <input type="text" placeholder="What activity?" value={exerciseName} onChange={e => setExerciseName(e.target.value)} />
-                    <button type="button" className="action-btn" onClick={estimateExercise} disabled={!exerciseName || isEstimatingExercise} title="Estimate calories with AI">
-                      <Sparkles className={isEstimatingExercise ? 'pulse' : ''} size={18} />
-                    </button>
-                  </div>
-                  <input type="number" placeholder="Calories Burned" value={exerciseCals} onChange={e => setExerciseCals(e.target.value)} />
-                  <button type="submit"><Plus size={18} /> Add Entry</button>
-                </form>
-                <div className="log-list">
-                  {todayExercise.map(ex => (
-                    <div key={ex.id} className="log-item">
-                      <span>{ex.name}</span>
-                      <span className="log-value-negative">-{ex.calories_burned} kcal</span>
-                    </div>
-                  ))}
-                  {todayExercise.length === 0 && <p className="empty-msg">No entries for today</p>}
-                </div>
-              </section>
-
-              <section className="card">
-                <h2>Track Metrics</h2>
+            <AddExerciseForm 
+              todayExercise={todayExercise}
+              onAddExercise={addExercise}
+              onDeleteExercise={deleteExercise}
+              estimateCalories={estimateExercise}
+            />
+            <section className="card">                <h2>Track Metrics</h2>
                 <form onSubmit={addMetrics}>
                   <input type="number" step="0.1" placeholder={`Daily Weight (${weightUnit})`} value={weightInput} onChange={e => setWeightInput(e.target.value)} />
                   <button type="submit" className="metrics-btn"><Scale size={18} /> Log Weight</button>
